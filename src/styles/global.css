@@ -1,0 +1,417 @@
+/* src/styles/global.css */
+
+:root {
+  /* ── 1. Tokens de Identidad (Basados en Stockea Navy & Gold) ── */
+  --color-primary:        #0E2138; /* Navy profundo elegante (no negro puro) */
+  --color-primary-light:  #163255; /* Navy medio para elevaciones */
+  --color-primary-bright: #2A5A96; /* Azul de acento funcional */
+
+  /* Acento Dorado (reservado para CTAs, focos y datos clave) */
+  --color-accent:         #C9A227; 
+  --color-accent-hover:   #DFBA45;
+  --color-accent-soft:    rgba(201, 162, 39, 0.12);
+
+  /* ── 2. Neutros & Descanso Visual (Anti-fatiga) ── */
+  --color-bg-main:        #09121D; /* Fondo general azul grafito atenuado */
+  --color-bg-card:        #0F1B2B; /* Contenedores / Tarjetas */
+  --color-bg-hover:       #152438; /* Hover sutil */
+
+  /* Textos: Blanco hueso / marfil y grises neutros cálidos */
+  --color-text-heading:   #F3F5F7; /* Blanco hueso suave */
+  --color-text-main:      #CBD5E1; /* Gris claro de alta legibilidad */
+  --color-text-muted:     #7F8E9F; /* Gris atenuado */
+  --color-border:         #1E3048; /* Bordes suaves sin estridencias */
+
+  /* ── 3. Estados Funcionales Semánticos ── */
+  --color-success:        #2E7D5B; /* Verde bosque controlado */
+  --color-success-soft:   rgba(46, 125, 91, 0.15);
+  --color-error:          #B3402A; /* Rojo teja corporativo (no chillón) */
+  --color-error-soft:     rgba(179, 64, 42, 0.15);
+  --color-warning:        #C98A27;
+  --color-warning-soft:   rgba(201, 138, 39, 0.15);
+
+  /* ── 4. Gradientes y Superficies ── */
+  --gradient-primary:     linear-gradient(135deg, #112742, #1E416B);
+  --gradient-accent:      linear-gradient(135deg, #B58F1D, #D8B33C);
+  --gradient-card:        linear-gradient(180deg, #101E30, #0C1826);
+
+  /* ── 5. Sistema de Espaciado y Formas ── */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  16px;
+  --radius-pill: 999px;
+
+  --shadow-sm:   0 2px 8px rgba(3, 8, 15, 0.35);
+  --shadow-md:   0 10px 24px rgba(3, 8, 15, 0.45);
+  --shadow-glow: 0 0 20px rgba(201, 162, 39, 0.15);
+
+  --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Reset Total ── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--color-bg-main);
+  color: var(--color-text-main);
+  font-family: var(--font-main);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Layout Responsive ── */
+.page-container {
+  width: 100%;
+  flex-grow: 1;
+  padding: 1.25rem;
+  transition: var(--transition);
+}
+
+@media (max-width: 768px) {
+  body {
+    padding-bottom: 85px;
+    padding-left: 0 !important;
+  }
+
+  .page-container {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding: 1rem !important;
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 769px) {
+  .page-container {
+    margin-left: 220px;
+    width: calc(100% - 220px);
+    padding: 2rem;
+  }
+}
+
+/* ── Componentes de Tarjeta ── */
+.card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 1.5rem;
+  border: 1px solid var(--color-border);
+  width: 100%;
+  transition: var(--transition);
+}
+
+.card:hover {
+  border-color: rgba(201, 162, 39, 0.25);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--color-text-heading);
+  letter-spacing: -0.01em;
+}
+
+p {
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  transition: var(--transition);
+}
+
+/* ── Scrollbar Discreta ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-main);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+/* ── Encabezados de Página ── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.page-header h2 { margin-bottom: 0.25rem; }
+
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-accent-soft);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  color: var(--color-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+
+/* ── Toasts de Feedback ── */
+.demo-toast {
+  background: var(--color-success-soft);
+  border: 1px solid rgba(46, 125, 91, 0.35);
+  color: #5EDBA2;
+  font-size: 0.84rem;
+  font-weight: 500;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 1.25rem;
+  animation: fadeInDown 0.25s ease;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Formularios Generales ── */
+.form-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.form-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-heading);
+  margin-bottom: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  letter-spacing: 0.01em;
+}
+
+.form-group input,
+.form-group select {
+  background: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--color-text-heading);
+  font-size: 0.88rem;
+  font-family: var(--font-main);
+  transition: var(--transition);
+  outline: none;
+  width: 100%;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.18);
+}
+
+.form-group input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 600px) {
+  .form-row { grid-template-columns: 1fr; }
+}
+
+/* Botón de acción primordial con acento Gold */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--gradient-accent);
+  color: #081527; /* Texto Navy legible sobre dorado */
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: var(--transition);
+  margin-top: 0.5rem;
+}
+
+.btn-primary:hover {
+  opacity: 0.93;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(201, 162, 39, 0.3);
+}
+
+/* ── Tablas Corporativas ── */
+.table-card { padding: 1.5rem; }
+
+.table-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-heading);
+  margin-bottom: 1rem;
+}
+
+.table-wrapper { overflow-x: auto; }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table thead tr {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table th {
+  text-align: left;
+  padding: 11px 14px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid rgba(30, 48, 72, 0.4);
+  transition: var(--transition);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(201, 162, 39, 0.03);
+}
+
+.data-table td { padding: 12px 14px; }
+
+.id-badge {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  font-size: 0.73rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.td-nombre { font-weight: 500; color: var(--color-text-heading); }
+.td-muted  { color: var(--color-text-muted); }
+.td-precio {
+  font-weight: 600;
+  color: var(--color-text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Badges de Estado ── */
+.estado-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.estado-badge.activo {
+  background: var(--color-success-soft);
+  color: #5EDBA2;
+}
+
+.estado-badge.inactivo {
+  background: var(--color-error-soft);
+  color: #F87171;
+}
+
+/* Stat Cards */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .stats-row { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: var(--transition);
+}
+
+.stat-card:hover {
+  border-color: rgba(201, 162, 39, 0.3);
+}
+
+.stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.stat-label {
+  font-size: 0.73rem;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-text-heading);
+}

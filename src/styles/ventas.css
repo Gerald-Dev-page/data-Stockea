@@ -1,0 +1,139 @@
+/* src/styles/ventas.css */
+
+.ventas-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  height: 60vh;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: var(--radius-pill);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ventas-form {
+  max-width: 100%;
+}
+
+.ventas-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .ventas-row { grid-template-columns: 1fr; }
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: 4px;
+  display: block;
+}
+.field-hint.error   { color: #F87171; }
+.field-hint.success { color: #5EDBA2; }
+
+/* Resumen del Ticket */
+.form-summary {
+  background: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  margin: 1.25rem 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 480px) {
+  .form-summary { grid-template-columns: 1fr; gap: 0.75rem; }
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-item span {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-item strong {
+  font-size: 1.2rem;
+  color: var(--color-text-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-item.highlight strong {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--color-accent); /* Total destacado en oro corporativo */
+}
+
+.btn-full {
+  width: 100%;
+  justify-content: center;
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
+.btn-full:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.hora-badge {
+  background: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table-count {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+}
+
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+  background: rgba(9, 18, 29, 0.4);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.total-dia {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-accent);
+}
