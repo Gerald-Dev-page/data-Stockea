@@ -620,10 +620,10 @@ export default function Ventas() {
               })}
               {historial.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--color-text-muted)' }}>
-                    Sin ventas registradas en la fecha actual.
-                  </td>
-                </tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--color-text-muted)' }}>
+                    Sin ventas registradas en la fecha actual.
+                  </td>
+                </tr> 
               )}
             </tbody>
           </table>
