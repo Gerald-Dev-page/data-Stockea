@@ -137,3 +137,41 @@
   font-weight: 700;
   color: var(--color-accent);
 }
+
+/* ── Layout principal de Ventas ── */
+.ventas-layout-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* ── Adaptación 100% Mobile ── */
+@media (max-width: 768px) {
+  .ventas-layout-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+
+  /* Formulario de agregar producto en 1 sola columna vertical */
+  .ventas-layout-grid .form-row {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Botones de medio de cobro táctiles y accesibles */
+  .ventas-layout-grid .form-group div[style*="gridTemplateColumns"] {
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 0.35rem !important;
+  }
+
+  /* Tabla del historial con scroll horizontal suave */
+  .table-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .data-table {
+    min-width: 560px !important;
+  }
+}

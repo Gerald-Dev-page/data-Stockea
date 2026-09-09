@@ -300,7 +300,8 @@ export default function Ventas() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.25rem', alignItems: 'start' }}>
+       
+<div className="ventas-layout-grid">
         
         {/* ── PANEL IZQUIERDO: Selector de Cliente y Carga de Artículos ── */}
         <div>

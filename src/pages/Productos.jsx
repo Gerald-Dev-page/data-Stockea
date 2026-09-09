@@ -442,7 +442,7 @@ export default function Productos() {
           <PlusCircle size={17} style={{ color: 'var(--color-accent)' }} /> Nueva Ficha de Producto
         </h3>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="productos-form">
           {/* Bloque 1: Identificación y Clasificación */}
           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             1. Identificación y Especificaciones
