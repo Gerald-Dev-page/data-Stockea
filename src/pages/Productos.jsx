@@ -5,11 +5,14 @@ import { comprimirAWebP } from '../utils/imageCompressor';
 import { 
   Package, PlusCircle, LayoutGrid, DollarSign, 
   AlertCircle, Edit, X, Check, Search, Filter, 
-  UploadCloud, Eye, Barcode, Globe, Truck, Percent
+  Eye, Truck, Percent, Wand2, Maximize2,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 const formatPrice = (n) =>
   Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+const ITEMS_PER_PAGE = 10;
 
 export default function Productos() {
   const [productos, setProductos] = useState([]);
@@ -22,9 +25,20 @@ export default function Productos() {
   const [toastMessage, setToastMessage] = useState("");
   const [userId, setUserId] = useState(null);
 
+  // Cotización Dólar
+  const [cotizacionDolar, setCotizacionDolar] = useState(1506);
+  const [guardandoDolar, setGuardandoDolar] = useState(false);
+  const [dolarGuardadoOk, setDolarGuardadoOk] = useState(false);
+
+  // Visor de Foto Ampliada (Lightbox)
+  const [fotoZoom, setFotoZoom] = useState(null);
+
   // Filtros
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
+
+  // Paginado
+  const [paginaActual, setPaginaActual] = useState(1);
 
   // Categoría inline
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
@@ -45,13 +59,13 @@ export default function Productos() {
     origen: 'Importado',
     descripcion: '',
     especificaciones: '',
-    costo_origen: '',
-    flete_int: '',
-    impuestos_aduana: '',
-    nacionalizacion: '',
-    flete_local: '',
-    precio_venta: '',
-    precio_mayorista: '',
+    costo_origen: '',      // en USD
+    flete_int: '',         // en USD
+    impuestos_aduana: '',  // en USD
+    nacionalizacion: '',   // en USD
+    flete_local: '',       // en USD
+    precio_venta: '',      // en ARS
+    precio_mayorista: '',  // en ARS
     stock_minimo: '5',
     stock_inicial: '0',
     fotos: []
@@ -66,7 +80,57 @@ export default function Productos() {
       if (user) setUserId(user.id);
     });
     fetchInitialData();
+    fetchCotizacion();
   }, []);
+
+  // Reiniciar a la primera página si cambian los filtros
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busqueda, categoriaFiltro]);
+
+  const fetchCotizacion = async () => {
+    try {
+      const { data, error: errCot } = await supabase
+        .from('configuracion')
+        .select('cotizacion_dolar')
+        .eq('id', 1)
+        .single();
+
+      if (errCot && errCot.code !== 'PGRST116') throw errCot;
+      if (data?.cotizacion_dolar) {
+        setCotizacionDolar(Number(data.cotizacion_dolar));
+      }
+    } catch (err) {
+      console.error("No se pudo cargar la cotización:", err.message);
+    }
+  };
+
+  const handleGuardarDolar = async () => {
+    const valor = Number(cotizacionDolar);
+    if (!valor || valor <= 0) return;
+
+    try {
+      setGuardandoDolar(true);
+      const { error: errUpsert } = await supabase
+        .from('configuracion')
+        .upsert({ 
+          id: 1, 
+          cotizacion_dolar: valor, 
+          actualizado_en: new Date().toISOString() 
+        });
+
+      if (errUpsert) throw errUpsert;
+
+      setDolarGuardadoOk(true);
+      showNotification(`Cotización guardada: $${valor.toLocaleString('es-AR')} ARS`);
+      setTimeout(() => setDolarGuardadoOk(false), 2500);
+    } catch (err) {
+      console.error("Error al guardar cotización:", err.message);
+      setError("No se pudo actualizar el tipo de cambio.");
+    } finally {
+      setGuardandoDolar(false);
+    }
+  };
 
   const fetchInitialData = async () => {
     try {
@@ -114,8 +178,23 @@ export default function Productos() {
     setEditFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // ── CÁLCULO DE COSTO PUESTO EN DEPÓSITO ──
-  const calcularCostoTotal = (data) => {
+  // Generador de SKU
+  const generarSkuAleatorio = (isEdit = false) => {
+    const catId = isEdit ? editFormData?.categoria_id : formData.categoria_id;
+    const cat = categorias.find(c => String(c.id) === String(catId));
+    const prefix = cat ? cat.nombre.slice(0, 3).toUpperCase().replace(/[^A-Z]/g, 'PRD') : 'PRD';
+    const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const skuGenerado = `${prefix}-${randomCode}`;
+
+    if (isEdit) {
+      setEditFormData(prev => ({ ...prev, sku: skuGenerado }));
+    } else {
+      setFormData(prev => ({ ...prev, sku: skuGenerado }));
+    }
+  };
+
+  // Cálculo en USD
+  const calcularCostoUSD = (data) => {
     const cOrigen = parseFloat(data.costo_origen) || 0;
     const fleteInt = parseFloat(data.flete_int) || 0;
     const aduana = parseFloat(data.impuestos_aduana) || 0;
@@ -124,13 +203,15 @@ export default function Productos() {
     return cOrigen + fleteInt + aduana + nac + fleteLoc;
   };
 
-  const costoFinalUnitario = calcularCostoTotal(formData);
-  const margenMinorista = (parseFloat(formData.precio_venta) || 0) - costoFinalUnitario;
-  const rentabilidadMinorista = costoFinalUnitario > 0 ? Math.round((margenMinorista / costoFinalUnitario) * 100) : 0;
-  const margenMayorista = (parseFloat(formData.precio_mayorista) || 0) - costoFinalUnitario;
-  const rentabilidadMayorista = costoFinalUnitario > 0 ? Math.round((margenMayorista / costoFinalUnitario) * 100) : 0;
+  const costoTotalUSD = calcularCostoUSD(formData);
+  const costoTotalARS = Math.round(costoTotalUSD * (Number(cotizacionDolar) || 1));
 
-  // ── SUBIDA DE FOTO OPTIMIZADA A WEBP ──
+  const margenMinorista = (parseFloat(formData.precio_venta) || 0) - costoTotalARS;
+  const rentabilidadMinorista = costoTotalARS > 0 ? Math.round((margenMinorista / costoTotalARS) * 100) : 0;
+  const margenMayorista = (parseFloat(formData.precio_mayorista) || 0) - costoTotalARS;
+  const rentabilidadMayorista = costoTotalARS > 0 ? Math.round((margenMayorista / costoTotalARS) * 100) : 0;
+
+  // Subida de imagen comprimida
   const handleSubirFoto = async (e, isEdit = false) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -162,7 +243,7 @@ export default function Productos() {
         setFormData(prev => ({ ...prev, fotos: [...prev.fotos, publicUrl] }));
       }
 
-      showNotification("Imagen comprimida a WebP y subida con éxito.");
+      showNotification("Imagen procesada y subida en formato WebP.");
     } catch (err) {
       console.error("Error al procesar foto:", err.message);
       setError("Error al subir imagen: " + err.message);
@@ -193,7 +274,7 @@ export default function Productos() {
     }
   };
 
-  // ── GUARDAR PRODUCTO NUEVO ──
+  // Alta de Producto
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -207,7 +288,7 @@ export default function Productos() {
 
     try {
       const stockInicialVal = parseInt(formData.stock_inicial) || 0;
-      const costoFinal = calcularCostoTotal(formData);
+      const costoFinalUSD = calcularCostoUSD(formData);
 
       const payload = {
         sku: formData.sku.trim(),
@@ -230,7 +311,7 @@ export default function Productos() {
           nacionalizacion: parseFloat(formData.nacionalizacion) || 0,
           flete_local: parseFloat(formData.flete_local) || 0
         },
-        costo_unitario: costoFinal,
+        costo_unitario: costoFinalUSD > 0 ? costoFinalUSD : (parseFloat(formData.costo_origen) || 0),
         precio_venta: parseFloat(formData.precio_venta),
         precio_mayorista: parseFloat(formData.precio_mayorista) || 0,
         stock_minimo: parseInt(formData.stock_minimo) || 0,
@@ -246,7 +327,7 @@ export default function Productos() {
         .single();
 
       if (insertError) {
-        if (insertError.code === '23505') throw new Error("El SKU o Código de barras ya existe en el sistema.");
+        if (insertError.code === '23505') throw new Error("El SKU o Código de barras ya existe en el catálogo.");
         throw insertError;
       }
 
@@ -287,7 +368,7 @@ export default function Productos() {
         fotos: []
       });
 
-      showNotification("Producto y costeo de importación registrados exitosamente.");
+      showNotification("Producto y costeo guardados exitosamente.");
       fetchInitialData();
     } catch (err) {
       console.error("Error al registrar producto:", err.message);
@@ -297,13 +378,13 @@ export default function Productos() {
     }
   };
 
-  // ── MODAL EDITAR / VER FICHA ──
+  // Edición / Ficha
   const openEditModal = (p) => {
     setEditingProduct(p);
     const g = p.gastos_importacion || {};
     setEditFormData({
       ...p,
-      costo_origen: p.costo_origen || '',
+      costo_origen: p.costo_origen || p.costo_unitario || '',
       flete_int: g.flete_int || '',
       impuestos_aduana: g.impuestos_aduana || '',
       nacionalizacion: g.nacionalizacion || '',
@@ -318,8 +399,10 @@ export default function Productos() {
     setError(null);
 
     try {
-      const costoFinal = calcularCostoTotal(editFormData);
+      const costoFinalUSD = calcularCostoUSD(editFormData);
+
       const updatePayload = {
+        sku: editFormData.sku,
         nombre: editFormData.nombre,
         codigo_barras: editFormData.codigo_barras || null,
         subcategoria: editFormData.subcategoria || null,
@@ -338,7 +421,7 @@ export default function Productos() {
           nacionalizacion: parseFloat(editFormData.nacionalizacion) || 0,
           flete_local: parseFloat(editFormData.flete_local) || 0
         },
-        costo_unitario: costoFinal,
+        costo_unitario: costoFinalUSD > 0 ? costoFinalUSD : (parseFloat(editFormData.costo_origen) || 0),
         precio_venta: parseFloat(editFormData.precio_venta),
         precio_mayorista: parseFloat(editFormData.precio_mayorista) || 0,
         stock_minimo: parseInt(editFormData.stock_minimo) || 0,
@@ -354,17 +437,17 @@ export default function Productos() {
       if (updErr) throw updErr;
 
       setEditingProduct(null);
-      showNotification("Ficha técnica y márgenes actualizados con éxito.");
+      showNotification("Ficha técnica actualizada.");
       fetchInitialData();
     } catch (err) {
       console.error(err);
-      setError("Error al actualizar la ficha: " + err.message);
+      setError("Error al actualizar ficha: " + err.message);
     } finally {
       setSaving(false);
     }
   };
 
-  // Filtrado
+  // Filtrado de tabla
   const productosFiltrados = useMemo(() => {
     return productos.filter(p => {
       const texto = `${p.nombre} ${p.sku} ${p.codigo_barras || ''} ${p.marca || ''}`.toLowerCase();
@@ -374,18 +457,71 @@ export default function Productos() {
     });
   }, [productos, busqueda, categoriaFiltro]);
 
+  // Paginado en memoria
+  const totalPaginas = Math.ceil(productosFiltrados.length / ITEMS_PER_PAGE) || 1;
+
+  const productosPaginados = useMemo(() => {
+    const inicio = (paginaActual - 1) * ITEMS_PER_PAGE;
+    return productosFiltrados.slice(inicio, inicio + ITEMS_PER_PAGE);
+  }, [productosFiltrados, paginaActual]);
+
   const activos = productos.filter(p => p.activo).length;
 
   return (
     <div className="page-container">
-      <header className="page-header">
+      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem' }}>
         <div>
           <h2>Gestión de Catálogo y Costeo</h2>
-          <p>Fichas técnicas maestras, costeo de importación (Land-in Cost) y cálculo de rentabilidad.</p>
+          <p>Fichas técnicas maestras, costeo de importación multimoneda y rentabilidad real.</p>
         </div>
-        <div className="header-badge">
-          <Package size={14} />
-          {productos.length} artículos registrados
+
+        {/* ── Widget Cotización Dólar Hoy con Botón Táctil ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--color-bg-card)', border: '1px solid rgba(201, 162, 39, 0.35)', padding: '6px 12px', borderRadius: 'var(--radius-sm)' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            USD Hoy:
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>$</span>
+            <input 
+              type="number" 
+              value={cotizacionDolar} 
+              onChange={(e) => setCotizacionDolar(e.target.value)}
+              style={{ 
+                width: '80px', 
+                height: '34px', 
+                fontSize: '0.9rem', 
+                fontWeight: 700, 
+                textAlign: 'right', 
+                padding: '2px 6px', 
+                background: 'var(--color-bg-main)', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: '4px', 
+                color: 'var(--color-text-heading)', 
+                outline: 'none'
+              }} 
+            />
+            <button
+              type="button"
+              onClick={handleGuardarDolar}
+              disabled={guardandoDolar}
+              style={{
+                height: '34px',
+                padding: '0 10px',
+                background: dolarGuardadoOk ? 'var(--color-success-soft)' : 'var(--color-accent-soft)',
+                border: `1px solid ${dolarGuardadoOk ? 'rgba(94, 219, 162, 0.4)' : 'rgba(201, 162, 39, 0.4)'}`,
+                color: dolarGuardadoOk ? '#5EDBA2' : 'var(--color-accent)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Check size={14} /> {guardandoDolar ? '...' : dolarGuardadoOk ? 'Listo!' : 'Guardar'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -401,7 +537,7 @@ export default function Productos() {
         </div>
       )}
 
-      {/* ── Métricas Rápidas ── */}
+      {/* ── Stat Cards ── */}
       <div className="stats-row">
         <div className="stat-card">
           <span className="stat-icon" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}>
@@ -420,7 +556,18 @@ export default function Productos() {
           <div>
             <p className="stat-label">Costo Depósito Promedio</p>
             <p className="stat-value">
-              {formatPrice(productos.length > 0 ? productos.reduce((a, b) => a + Number(b.costo_unitario || 0), 0) / productos.length : 0)}
+              {formatPrice(
+                productos.length > 0
+                  ? productos.reduce((acc, p) => {
+                      const gastos = p.gastos_importacion || {};
+                      const cOrigen = Number(p.costo_origen) || 0;
+                      const cUSD = cOrigen > 0
+                        ? cOrigen + (Number(gastos.flete_int) || 0) + (Number(gastos.impuestos_aduana) || 0) + (Number(gastos.nacionalizacion) || 0) + (Number(gastos.flete_local) || 0)
+                        : Number(p.costo_unitario) || 0;
+                      return acc + (cUSD * (Number(cotizacionDolar) || 1));
+                    }, 0) / productos.length
+                  : 0
+              )}
             </p>
           </div>
         </div>
@@ -436,22 +583,31 @@ export default function Productos() {
         </div>
       </div>
 
-      {/* ── Formulario de Alta con Ficha Integral ── */}
+      {/* ── Formulario de Alta ── */}
       <div className="form-card" style={{ marginBottom: '2rem' }}>
         <h3 className="form-title">
           <PlusCircle size={17} style={{ color: 'var(--color-accent)' }} /> Nueva Ficha de Producto
         </h3>
 
         <form onSubmit={handleSubmit} className="productos-form">
-          {/* Bloque 1: Identificación y Clasificación */}
           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            1. Identificación y Especificaciones
+            1. Identificación y Clasificación
           </div>
 
-          <div className="form-row" style={{ gridTemplateColumns: '1.2fr 1.2fr 2fr' }}>
+          <div className="form-row" style={{ gridTemplateColumns: '1.4fr 1.2fr 2fr' }}>
             <div className="form-group">
-              <label>Código SKU (Interno)</label>
-              <input type="text" name="sku" placeholder="Ej: IMP-LMP-01" value={formData.sku} onChange={handleChange} required />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label>Código SKU</label>
+                <button 
+                  type="button" 
+                  onClick={() => generarSkuAleatorio(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600, padding: 0 }}
+                  title="Generar SKU automático"
+                >
+                  <Wand2 size={12} /> Autogenerar
+                </button>
+              </div>
+              <input type="text" name="sku" placeholder="Ej: PRD-A8F2" value={formData.sku} onChange={handleChange} required />
             </div>
 
             <div className="form-group">
@@ -460,8 +616,8 @@ export default function Productos() {
             </div>
 
             <div className="form-group">
-              <label>Nombre Comercial del Producto</label>
-              <input type="text" name="nombre" placeholder="Ej: Lámpara LED Táctil Recargable" value={formData.nombre} onChange={handleChange} required />
+              <label>Nombre Comercial</label>
+              <input type="text" name="nombre" placeholder="Ej: Amplificador de Pantalla" value={formData.nombre} onChange={handleChange} required />
             </div>
           </div>
 
@@ -488,96 +644,100 @@ export default function Productos() {
 
             <div className="form-group">
               <label>Subcategoría</label>
-              <input type="text" name="subcategoria" placeholder="Ej: Escritorio" value={formData.subcategoria} onChange={handleChange} />
+              <input type="text" name="subcategoria" placeholder="Ej: Celulares" value={formData.subcategoria} onChange={handleChange} />
             </div>
 
             <div className="form-group">
               <label>Marca</label>
-              <input type="text" name="marca" placeholder="Ej: Lumina" value={formData.marca} onChange={handleChange} />
+              <input type="text" name="marca" placeholder="Ej: GadgetPro" value={formData.marca} onChange={handleChange} />
             </div>
 
             <div className="form-group">
               <label>Modelo</label>
-              <input type="text" name="modelo" placeholder="Ej: Pro-X" value={formData.modelo} onChange={handleChange} />
+              <input type="text" name="modelo" placeholder="Ej: F2-Screen" value={formData.modelo} onChange={handleChange} />
             </div>
           </div>
 
           <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1.5fr 1fr' }}>
             <div className="form-group">
               <label>Color</label>
-              <input type="text" name="color" placeholder="Ej: Negro Mate" value={formData.color} onChange={handleChange} />
+              <input type="text" name="color" placeholder="Ej: Negro" value={formData.color} onChange={handleChange} />
             </div>
 
             <div className="form-group">
               <label>Tamaño / Medidas</label>
-              <input type="text" name="tamanio" placeholder="Ej: 35 x 12 cm" value={formData.tamanio} onChange={handleChange} />
+              <input type="text" name="tamanio" placeholder="Ej: 12 pulgadas" value={formData.tamanio} onChange={handleChange} />
             </div>
 
             <div className="form-group">
               <label>Proveedor</label>
-              <input type="text" name="proveedor" placeholder="Ej: ShenZhen Electronics Ltd." value={formData.proveedor} onChange={handleChange} />
+              <input type="text" name="proveedor" placeholder="Ej: Guangzhou Trading" value={formData.proveedor} onChange={handleChange} />
             </div>
 
             <div className="form-group">
               <label>Origen</label>
-              <input type="text" name="origen" placeholder="Ej: China / Nacional" value={formData.origen} onChange={handleChange} />
+              <input type="text" name="origen" placeholder="Ej: Importado" value={formData.origen} onChange={handleChange} />
             </div>
           </div>
 
-          {/* Bloque 2: Costeo de Importación (Land-in Cost) */}
+          {/* Bloque 2: Costeo en Dólares */}
           <div style={{ marginTop: '1.25rem', padding: '1.25rem', background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Truck size={15} /> 2. Estructura de Costeo de Importación (Por Unidad)
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Truck size={15} /> 2. Costeo en Dólares (USD por unidad)
+              </span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                Conversión: <strong>${Number(cotizacionDolar || 0).toLocaleString('es-AR')} ARS</strong>
+              </span>
             </div>
 
             <div className="form-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
               <div className="form-group">
-                <label>Costo Origen (FOB)</label>
-                <input type="number" step="0.01" min="0" name="costo_origen" placeholder="0.00" value={formData.costo_origen} onChange={handleChange} required />
+                <label>Costo Origen (USD)</label>
+                <input type="number" step="0.01" min="0" name="costo_origen" placeholder="Ej: 2.00" value={formData.costo_origen} onChange={handleChange} required />
               </div>
 
               <div className="form-group">
-                <label>Flete Internacional</label>
+                <label>Flete Int. (USD)</label>
                 <input type="number" step="0.01" min="0" name="flete_int" placeholder="0.00" value={formData.flete_int} onChange={handleChange} />
               </div>
 
               <div className="form-group">
-                <label>Impuestos / Aduana</label>
+                <label>Aduana (USD)</label>
                 <input type="number" step="0.01" min="0" name="impuestos_aduana" placeholder="0.00" value={formData.impuestos_aduana} onChange={handleChange} />
               </div>
 
               <div className="form-group">
-                <label>Nacionalización</label>
+                <label>Nacionaliz. (USD)</label>
                 <input type="number" step="0.01" min="0" name="nacionalizacion" placeholder="0.00" value={formData.nacionalizacion} onChange={handleChange} />
               </div>
 
               <div className="form-group">
-                <label>Flete Interno Local</label>
+                <label>Flete Local (USD)</label>
                 <input type="number" step="0.01" min="0" name="flete_local" placeholder="0.00" value={formData.flete_local} onChange={handleChange} />
               </div>
             </div>
 
-            {/* Resumen del Costo Unitario en Depósito */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--color-accent-soft)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(201, 162, 39, 0.3)', marginTop: '0.5rem' }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase' }}>
-                Costo Real Final en Depósito (Unitario):
-              </span>
-              <strong style={{ fontSize: '1.25rem', color: 'var(--color-accent)' }}>
-                {formatPrice(costoFinalUnitario)}
-              </strong>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'var(--color-accent-soft)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(201, 162, 39, 0.3)', marginTop: '0.5rem', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ fontSize: '0.82rem', color: 'var(--color-text-heading)' }}>
+                Subtotal Costo: <strong>USD ${costoTotalUSD.toFixed(2)}</strong>
+              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase' }}>
+                Costo Real en Depósito (ARS): <strong style={{ fontSize: '1.25rem' }}>{formatPrice(costoTotalARS)}</strong>
+              </div>
             </div>
           </div>
 
-          {/* Bloque 3: Precios, Márgenes y Rentabilidad */}
+          {/* Bloque 3: Precios en PESOS */}
           <div style={{ marginTop: '1.25rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Percent size={15} /> 3. Precios de Venta y Rentabilidad
+            <Percent size={15} /> 3. Precios de Venta (ARS) y Rentabilidad Real
           </div>
 
           <div className="form-row" style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr' }}>
             <div className="form-group">
-              <label>Precio Venta (Minorista)</label>
-              <input type="number" step="0.01" min="0" name="precio_venta" placeholder="0.00" value={formData.precio_venta} onChange={handleChange} required />
-              {costoFinalUnitario > 0 && (
+              <label>Precio Venta Minorista (ARS)</label>
+              <input type="number" step="0.01" min="0" name="precio_venta" placeholder="Ej: 10000" value={formData.precio_venta} onChange={handleChange} required />
+              {costoTotalARS > 0 && (
                 <span style={{ fontSize: '0.72rem', color: margenMinorista >= 0 ? '#5EDBA2' : '#F87171', marginTop: '3px', display: 'block' }}>
                   Ganancia: <strong>{formatPrice(margenMinorista)}</strong> ({rentabilidadMinorista}%)
                 </span>
@@ -585,9 +745,9 @@ export default function Productos() {
             </div>
 
             <div className="form-group">
-              <label>Precio Mayorista</label>
-              <input type="number" step="0.01" min="0" name="precio_mayorista" placeholder="0.00" value={formData.precio_mayorista} onChange={handleChange} />
-              {costoFinalUnitario > 0 && (
+              <label>Precio Mayorista (ARS)</label>
+              <input type="number" step="0.01" min="0" name="precio_mayorista" placeholder="Ej: 8000" value={formData.precio_mayorista} onChange={handleChange} />
+              {costoTotalARS > 0 && (
                 <span style={{ fontSize: '0.72rem', color: margenMayorista >= 0 ? '#6EA8FE' : '#F87171', marginTop: '3px', display: 'block' }}>
                   Ganancia: <strong>{formatPrice(margenMayorista)}</strong> ({rentabilidadMayorista}%)
                 </span>
@@ -608,13 +768,20 @@ export default function Productos() {
           {/* Bloque 4: Multimedia y Guardado */}
           <div className="form-row" style={{ gridTemplateColumns: '1.5fr 2fr', alignItems: 'center', marginTop: '1rem' }}>
             <div className="form-group">
-              <label>Foto del Producto (Compresión WebP automática)</label>
+              <label>Foto del Producto (Compresión WebP)</label>
               <input type="file" accept="image/*" disabled={subiendoFoto} onChange={(e) => handleSubirFoto(e, false)} />
-              {subiendoFoto && <small style={{ color: 'var(--color-accent)' }}>Comprimiendo a WebP y subiendo a la nube...</small>}
+              {subiendoFoto && <small style={{ color: 'var(--color-accent)' }}>Comprimiendo a WebP y subiendo...</small>}
               {formData.fotos.length > 0 && (
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   {formData.fotos.map((url, i) => (
-                    <img key={i} src={url} alt="Preview" style={{ width: '50px', height: '50px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--color-border)' }} />
+                    <img 
+                      key={i} 
+                      src={url} 
+                      alt="Preview" 
+                      onClick={() => setFotoZoom(url)}
+                      style={{ width: '50px', height: '50px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--color-border)', cursor: 'pointer' }} 
+                      title="Tocar para ampliar"
+                    />
                   ))}
                 </div>
               )}
@@ -622,14 +789,14 @@ export default function Productos() {
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-end', height: '100%' }}>
               <button className="btn-primary" type="submit" disabled={saving || subiendoFoto} style={{ width: '100%', padding: '12px' }}>
-                {saving ? 'Registrando Ficha...' : <><PlusCircle size={16} /> Guardar Producto e Importación</>}
+                {saving ? 'Registrando...' : <><PlusCircle size={16} /> Guardar Ficha e Importación</>}
               </button>
             </div>
           </div>
         </form>
       </div>
 
-      {/* ── Catálogo Maestro con Buscador y Selector ── */}
+      {/* ── Catálogo Maestro con Fotos Ampliables y Costo Dual ── */}
       <div className="card table-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <h3 className="table-title" style={{ margin: 0 }}>Catálogo Centralizado</h3>
@@ -679,20 +846,42 @@ export default function Productos() {
                 </tr>
               </thead>
               <tbody>
-                {productosFiltrados.map((p) => {
-                  const costoU = Number(p.costo_unitario || 0);
+                {productosPaginados.map((p) => {
+                  const gastos = p.gastos_importacion || {};
+                  const costoOrigen = Number(p.costo_origen) || 0;
+                  
+                  // Obtener costo base en USD
+                  const costoUSD = costoOrigen > 0
+                    ? costoOrigen + (Number(gastos.flete_int) || 0) + (Number(gastos.impuestos_aduana) || 0) + (Number(gastos.nacionalizacion) || 0) + (Number(gastos.flete_local) || 0)
+                    : Number(p.costo_unitario) || 0;
+
+                  // Conversión a pesos según cotización actual del dólar
+                  const costoARS = Math.round(costoUSD * (Number(cotizacionDolar) || 1));
+
+                  // Precios en ARS
                   const pMin = Number(p.precio_venta || 0);
                   const pMay = Number(p.precio_mayorista || 0);
-                  const rentMin = costoU > 0 ? Math.round(((pMin - costoU) / costoU) * 100) : 0;
-                  const rentMay = costoU > 0 ? Math.round(((pMay - costoU) / costoU) * 100) : 0;
+
+                  // Rentabilidad real
+                  const rentMin = costoARS > 0 ? Math.round(((pMin - costoARS) / costoARS) * 100) : 0;
+                  const rentMay = costoARS > 0 ? Math.round(((pMay - costoARS) / costoARS) * 100) : 0;
 
                   return (
                     <tr key={p.id_producto}>
-                      <td style={{ width: '45px', textAlign: 'center' }}>
+                      <td style={{ width: '50px', textAlign: 'center' }}>
                         {p.fotos && p.fotos.length > 0 ? (
-                          <img src={p.fotos[0]} alt={p.nombre} style={{ width: '36px', height: '36px', borderRadius: '4px', objectFit: 'cover' }} />
+                          <div 
+                            style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}
+                            onClick={() => setFotoZoom(p.fotos[0])}
+                            title="Tocar para ampliar foto"
+                          >
+                            <img src={p.fotos[0]} alt={p.nombre} style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
+                            <span style={{ position: 'absolute', bottom: 2, right: 2, background: 'rgba(0,0,0,0.6)', borderRadius: '2px', padding: '1px' }}>
+                              <Maximize2 size={10} color="#FFF" />
+                            </span>
+                          </div>
                         ) : (
-                          <div style={{ width: '36px', height: '36px', background: 'var(--color-bg-main)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
+                          <div style={{ width: '40px', height: '40px', background: 'var(--color-bg-main)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-muted)' }}>
                             <Package size={16} />
                           </div>
                         )}
@@ -705,15 +894,33 @@ export default function Productos() {
                         {p.nombre}
                         <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{p.marca} {p.modelo}</span>
                       </td>
-                      <td className="td-muted" style={{ fontWeight: 600 }}>{formatPrice(costoU)}</td>
+
+                      {/* Costo Real dual: USD / ARS */}
+                      <td className="td-muted" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        <div>USD ${costoUSD.toFixed(2)}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--color-accent)' }}>
+                          {formatPrice(costoARS)}
+                        </div>
+                      </td>
+
+                      {/* Minorista en ARS + Rentabilidad real */}
                       <td>
                         <span className="td-precio">{formatPrice(pMin)}</span>
-                        <span style={{ display: 'block', fontSize: '0.7rem', color: rentMin >= 0 ? '#5EDBA2' : '#F87171' }}>+{rentMin}%</span>
+                        <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: rentMin >= 0 ? '#5EDBA2' : '#F87171' }}>
+                          {rentMin >= 0 ? `+${rentMin}%` : `${rentMin}%`}
+                        </span>
                       </td>
+
+                      {/* Mayorista en ARS + Rentabilidad real */}
                       <td>
                         <span className="td-muted">{pMay > 0 ? formatPrice(pMay) : '—'}</span>
-                        {pMay > 0 && <span style={{ display: 'block', fontSize: '0.7rem', color: rentMay >= 0 ? '#6EA8FE' : '#F87171' }}>+{rentMay}%</span>}
+                        {pMay > 0 && (
+                          <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: rentMay >= 0 ? '#6EA8FE' : '#F87171' }}>
+                            {rentMay >= 0 ? `+${rentMay}%` : `${rentMay}%`}
+                          </span>
+                        )}
                       </td>
+
                       <td style={{ fontWeight: '700', color: p.stock_actual <= p.stock_minimo ? '#FBBF24' : 'var(--color-text-heading)' }}>
                         {p.stock_actual} u.
                       </td>
@@ -735,6 +942,55 @@ export default function Productos() {
             </table>
           )}
         </div>
+
+        {/* ── Control de Paginado ── */}
+        {!loading && productosFiltrados.length > 0 && (
+          <div className="pagination-container">
+            <div className="pagination-info">
+              Mostrando <strong>{(paginaActual - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaActual * ITEMS_PER_PAGE, productosFiltrados.length)}</strong> de <strong>{productosFiltrados.length}</strong> artículos
+            </div>
+
+            <div className="pagination-controls">
+              <button
+                type="button"
+                className="pagination-btn"
+                onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
+                disabled={paginaActual === 1}
+                title="Página anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 1)
+                .map((page, idx, arr) => {
+                  const prev = arr[idx - 1];
+                  return (
+                    <span key={page} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      {prev && page - prev > 1 && <span className="pagination-ellipsis">...</span>}
+                      <button
+                        type="button"
+                        className={`pagination-btn ${paginaActual === page ? 'active' : ''}`}
+                        onClick={() => setPaginaActual(page)}
+                      >
+                        {page}
+                      </button>
+                    </span>
+                  );
+                })}
+
+              <button
+                type="button"
+                className="pagination-btn"
+                onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
+                disabled={paginaActual === totalPaginas}
+                title="Página siguiente"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Modal Ficha Técnica y Edición Completa ── */}
@@ -750,7 +1006,16 @@ export default function Productos() {
             </div>
 
             <form onSubmit={handleEditSubmit}>
-              <div className="form-row" style={{ gridTemplateColumns: '2fr 1fr' }}>
+              <div className="form-row" style={{ gridTemplateColumns: '1.2fr 2fr 1fr' }}>
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <label>SKU</label>
+                    <button type="button" onClick={() => generarSkuAleatorio(true)} style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600 }}>
+                      <Wand2 size={11} style={{ display: 'inline' }} /> Nuevo
+                    </button>
+                  </div>
+                  <input type="text" name="sku" value={editFormData.sku} onChange={handleEditChange} required />
+                </div>
                 <div className="form-group">
                   <label>Nombre del Producto</label>
                   <input type="text" name="nombre" value={editFormData.nombre} onChange={handleEditChange} required />
@@ -761,29 +1026,11 @@ export default function Productos() {
                 </div>
               </div>
 
-              <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
-                <div className="form-group">
-                  <label>Marca</label>
-                  <input type="text" name="marca" value={editFormData.marca || ''} onChange={handleEditChange} />
-                </div>
-                <div className="form-group">
-                  <label>Modelo</label>
-                  <input type="text" name="modelo" value={editFormData.modelo || ''} onChange={handleEditChange} />
-                </div>
-                <div className="form-group">
-                  <label>Color</label>
-                  <input type="text" name="color" value={editFormData.color || ''} onChange={handleEditChange} />
-                </div>
-                <div className="form-group">
-                  <label>Tamaño</label>
-                  <input type="text" name="tamanio" value={editFormData.tamanio || ''} onChange={handleEditChange} />
-                </div>
-              </div>
-
-              {/* Costeo de Importación en Modal */}
+              {/* Costeo en Modal */}
               <div style={{ padding: '1rem', background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', margin: '1rem 0' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-                  Desglose de Costo Unitario
+                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                  <span>Desglose en Dólares (USD)</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Cotización: ${Number(cotizacionDolar || 0).toLocaleString('es-AR')} ARS</span>
                 </div>
                 <div className="form-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
                   <div className="form-group">
@@ -808,17 +1055,17 @@ export default function Productos() {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--color-text-heading)', marginTop: '4px' }}>
-                  Costo Final en Depósito: <strong>{formatPrice(calcularCostoTotal(editFormData))}</strong>
+                  Costo Final en Depósito: <strong>{formatPrice(calcularCostoUSD(editFormData) * (Number(cotizacionDolar) || 1))}</strong>
                 </div>
               </div>
 
               <div className="form-row" style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr' }}>
                 <div className="form-group">
-                  <label>Precio Venta Minorista</label>
+                  <label>Precio Venta Minorista (ARS)</label>
                   <input type="number" step="0.01" name="precio_venta" value={editFormData.precio_venta} onChange={handleEditChange} required />
                 </div>
                 <div className="form-group">
-                  <label>Precio Mayorista</label>
+                  <label>Precio Mayorista (ARS)</label>
                   <input type="number" step="0.01" name="precio_mayorista" value={editFormData.precio_mayorista} onChange={handleEditChange} />
                 </div>
                 <div className="form-group">
@@ -827,14 +1074,20 @@ export default function Productos() {
                 </div>
               </div>
 
-              {/* Subir foto adicional */}
               <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                <label>Agregar / Reemplazar Imagen (WebP)</label>
+                <label>Foto del Artículo (WebP)</label>
                 <input type="file" accept="image/*" disabled={subiendoFoto} onChange={(e) => handleSubirFoto(e, true)} />
                 {editFormData.fotos && editFormData.fotos.length > 0 && (
                   <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                     {editFormData.fotos.map((url, i) => (
-                      <img key={i} src={url} alt="Foto" style={{ width: '45px', height: '45px', borderRadius: '4px', objectFit: 'cover' }} />
+                      <img 
+                        key={i} 
+                        src={url} 
+                        alt="Foto" 
+                        onClick={() => setFotoZoom(url)}
+                        style={{ width: '45px', height: '45px', borderRadius: '4px', objectFit: 'cover', cursor: 'pointer' }} 
+                        title="Tocar para ampliar"
+                      />
                     ))}
                   </div>
                 )}
@@ -849,6 +1102,28 @@ export default function Productos() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Lightbox para Zoom de Foto ── */}
+      {fotoZoom && (
+        <div 
+          onClick={() => setFotoZoom(null)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.88)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-out', padding: '1rem' }}
+        >
+          <div style={{ position: 'relative', maxWidth: '92%', maxHeight: '90%' }}>
+            <img 
+              src={fotoZoom} 
+              alt="Zoom" 
+              style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: '8px', objectFit: 'contain', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }} 
+            />
+            <button 
+              onClick={() => setFotoZoom(null)} 
+              style={{ position: 'absolute', top: '-40px', right: '0', background: 'none', border: 'none', color: '#FFF', cursor: 'pointer', padding: '4px' }}
+            >
+              <X size={24} />
+            </button>
           </div>
         </div>
       )}

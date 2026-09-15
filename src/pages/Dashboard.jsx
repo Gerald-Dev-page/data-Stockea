@@ -5,7 +5,8 @@ import {
   TrendingUp, TrendingDown, DollarSign,
   ShoppingCart, Package, BarChart2,
   FileDown, Calendar, AlertCircle, UserCheck,
-  Banknote, Landmark, CreditCard, FileSpreadsheet
+  Banknote, Landmark, CreditCard, FileSpreadsheet,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import '../styles/dashboard.css';
 
@@ -19,6 +20,8 @@ const formatPrice = (n) =>
 
 const CHART_COLORS = ['#C9A227', '#2A5A96', '#2E7D5B', '#8B5CF6', '#C98A27', '#0284C7', '#B3402A'];
 
+const ITEMS_PER_PAGE = 10;
+
 export default function Dashboard() {
   const [ventas, setVentas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,14 @@ export default function Dashboard() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(hoyStr);
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
   const [fechaFin, setFechaFin] = useState(hoyStr);
+
+  // Control de paginado
+  const [paginaActual, setPaginaActual] = useState(1);
+
+  // Resetear paginado al cambiar cualquier filtro de fecha
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -205,6 +216,14 @@ export default function Dashboard() {
       : f >= fechaInicio && f <= fechaFin;
     return ventas.filter(v => enRango(v.fecha));
   }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
+
+  // Paginado en memoria
+  const totalPaginas = Math.ceil(ultimasVentas.length / ITEMS_PER_PAGE) || 1;
+
+  const ventasPaginadas = useMemo(() => {
+    const inicio = (paginaActual - 1) * ITEMS_PER_PAGE;
+    return ultimasVentas.slice(inicio, inicio + ITEMS_PER_PAGE);
+  }, [ultimasVentas, paginaActual]);
 
   const exportarCSV = () => {
     if (ultimasVentas.length === 0) return;
@@ -473,7 +492,7 @@ export default function Dashboard() {
                         No hay ventas registradas en el período seleccionado.
                       </td>
                     </tr>
-                  ) : ultimasVentas.slice(0, 10).map(v => (
+                  ) : ventasPaginadas.map(v => (
                     <tr key={v.id_venta}>
                       <td><span className="hora-badge">{v.hora}</span></td>
                       <td>
@@ -496,6 +515,55 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
+
+            {/* ── Control de Paginado ── */}
+            {ultimasVentas.length > 0 && (
+              <div className="pagination-container no-print">
+                <div className="pagination-info">
+                  Mostrando <strong>{(paginaActual - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaActual * ITEMS_PER_PAGE, ultimasVentas.length)}</strong> de <strong>{ultimasVentas.length}</strong> operaciones
+                </div>
+
+                <div className="pagination-controls">
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
+                    disabled={paginaActual === 1}
+                    title="Página anterior"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 1)
+                    .map((page, idx, arr) => {
+                      const prev = arr[idx - 1];
+                      return (
+                        <span key={page} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {prev && page - prev > 1 && <span className="pagination-ellipsis">...</span>}
+                          <button
+                            type="button"
+                            className={`pagination-btn ${paginaActual === page ? 'active' : ''}`}
+                            onClick={() => setPaginaActual(page)}
+                          >
+                            {page}
+                          </button>
+                        </span>
+                      );
+                    })}
+
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
+                    disabled={paginaActual === totalPaginas}
+                    title="Página siguiente"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

@@ -3,9 +3,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { 
   Boxes, AlertTriangle, CheckCircle, XCircle, 
-  ArrowUpDown, Search, Filter, History, Truck, BookmarkCheck, PackageCheck
+  ArrowUpDown, Search, Filter, History, Truck, BookmarkCheck, PackageCheck,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import '../styles/stock.css';
+
+const ITEMS_PER_PAGE = 10;
 
 export default function Stock() {
   const [productos, setProductos] = useState([]);
@@ -19,6 +22,10 @@ export default function Stock() {
   // Filtros
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
+
+  // Paginado independiente
+  const [paginaStock, setPaginaStock] = useState(1);
+  const [paginaMovs, setPaginaMovs] = useState(1);
 
   // Modal de Ajuste
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -35,6 +42,11 @@ export default function Stock() {
     });
     fetchStockData();
   }, []);
+
+  // Reiniciar página de stock al buscar o cambiar estado de filtro
+  useEffect(() => {
+    setPaginaStock(1);
+  }, [busqueda, filtroEstado]);
 
   const fetchStockData = async () => {
     try {
@@ -61,7 +73,7 @@ export default function Stock() {
           perfiles ( nombre_completo )
         `)
         .order('creado_en', { ascending: false })
-        .limit(50);
+        .limit(100);
       if (errMovs) throw errMovs;
       setMovimientos(movs || []);
 
@@ -95,6 +107,20 @@ export default function Stock() {
       return true;
     });
   }, [productos, busqueda, filtroEstado]);
+
+  // Paginación de existencias
+  const totalPaginasStock = Math.ceil(productosFiltrados.length / ITEMS_PER_PAGE) || 1;
+  const productosPaginados = useMemo(() => {
+    const inicio = (paginaStock - 1) * ITEMS_PER_PAGE;
+    return productosFiltrados.slice(inicio, inicio + ITEMS_PER_PAGE);
+  }, [productosFiltrados, paginaStock]);
+
+  // Paginación de bitácora
+  const totalPaginasMovs = Math.ceil(movimientos.length / ITEMS_PER_PAGE) || 1;
+  const movimientosPaginados = useMemo(() => {
+    const inicio = (paginaMovs - 1) * ITEMS_PER_PAGE;
+    return movimientos.slice(inicio, inicio + ITEMS_PER_PAGE);
+  }, [movimientos, paginaMovs]);
 
   const openAjusteModal = (prod) => {
     setSelectedProduct(prod);
@@ -151,7 +177,7 @@ export default function Stock() {
         .eq('id_producto', selectedProduct.id_producto);
       if (errUpd) throw errUpd;
 
-      // 2. Registrar en auditoría forense
+      // 2. Registrar en auditoría
       const { error: errAud } = await supabase
         .from('movimientos_stock')
         .insert([{
@@ -187,6 +213,7 @@ export default function Stock() {
 
       {error && (
         <div className="demo-toast" style={{ background: 'var(--color-error-soft)', borderColor: 'rgba(179, 64, 42, 0.4)', color: '#F87171' }}>
+          <AlertTriangle size={15} style={{ display: 'inline', marginRight: '6px' }} />
           {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#F87171', cursor: 'pointer' }}>✕</button>
         </div>
@@ -327,7 +354,7 @@ export default function Stock() {
                 </tr>
               </thead>
               <tbody>
-                {productosFiltrados.map(p => {
+                {productosPaginados.map(p => {
                   const disponible = (p.stock_actual || 0) - (p.stock_reservado || 0);
                   const esCritico = disponible <= p.stock_minimo;
 
@@ -393,6 +420,55 @@ export default function Stock() {
               </tbody>
             </table>
           </div>
+
+          {/* ── Barra de Paginado Existencias ── */}
+          {!loading && productosFiltrados.length > 0 && (
+            <div className="pagination-container">
+              <div className="pagination-info">
+                Mostrando <strong>{(paginaStock - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaStock * ITEMS_PER_PAGE, productosFiltrados.length)}</strong> de <strong>{productosFiltrados.length}</strong> artículos
+              </div>
+
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => setPaginaStock(p => Math.max(p - 1, 1))}
+                  disabled={paginaStock === 1}
+                  title="Página anterior"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                {Array.from({ length: totalPaginasStock }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPaginasStock || Math.abs(p - paginaStock) <= 1)
+                  .map((page, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <span key={page} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        {prev && page - prev > 1 && <span className="pagination-ellipsis">...</span>}
+                        <button
+                          type="button"
+                          className={`pagination-btn ${paginaStock === page ? 'active' : ''}`}
+                          onClick={() => setPaginaStock(page)}
+                        >
+                          {page}
+                        </button>
+                      </span>
+                    );
+                  })}
+
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => setPaginaStock(p => Math.min(p + 1, totalPaginasStock))}
+                  disabled={paginaStock === totalPaginasStock}
+                  title="Página siguiente"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -414,7 +490,7 @@ export default function Stock() {
                 </tr>
               </thead>
               <tbody>
-                {movimientos.map(m => {
+                {movimientosPaginados.map(m => {
                   const f = new Date(m.creado_en);
                   const fechaStr = `${f.toLocaleDateString('es-AR')} ${f.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`;
                   const esPositivo = m.cantidad > 0;
@@ -441,6 +517,55 @@ export default function Stock() {
               </tbody>
             </table>
           </div>
+
+          {/* ── Barra de Paginado Auditoría ── */}
+          {!loading && movimientos.length > 0 && (
+            <div className="pagination-container">
+              <div className="pagination-info">
+                Mostrando <strong>{(paginaMovs - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaMovs * ITEMS_PER_PAGE, movimientos.length)}</strong> de <strong>{movimientos.length}</strong> movimientos
+              </div>
+
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => setPaginaMovs(p => Math.max(p - 1, 1))}
+                  disabled={paginaMovs === 1}
+                  title="Página anterior"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                {Array.from({ length: totalPaginasMovs }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPaginasMovs || Math.abs(p - paginaMovs) <= 1)
+                  .map((page, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <span key={page} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        {prev && page - prev > 1 && <span className="pagination-ellipsis">...</span>}
+                        <button
+                          type="button"
+                          className={`pagination-btn ${paginaMovs === page ? 'active' : ''}`}
+                          onClick={() => setPaginaMovs(page)}
+                        >
+                          {page}
+                        </button>
+                      </span>
+                    );
+                  })}
+
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  onClick={() => setPaginaMovs(p => Math.min(p + 1, totalPaginasMovs))}
+                  disabled={paginaMovs === totalPaginasMovs}
+                  title="Página siguiente"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -489,7 +614,7 @@ export default function Stock() {
                     type="number" 
                     min="1" 
                     value={ajusteForm.cantidad} 
-                    onChange={(e) => setAjusteForm(prev => ({ ...prev, cantidad: e.target.value }))}
+                    onChange={(e) => setAjusteForm(prev => ({ ...prev, cantidad: e.target.value }))} 
                     required 
                   />
                 </div>

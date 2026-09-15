@@ -1,14 +1,17 @@
 // src/pages/Ventas.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { 
   ShoppingCart, User, Package, Clock, TrendingUp, 
-  AlertCircle, Trash2, Plus, CreditCard, Banknote, Landmark, CheckCircle2 
+  AlertCircle, Trash2, Plus, CreditCard, Banknote, Landmark, CheckCircle2,
+  ChevronLeft, ChevronRight 
 } from 'lucide-react';
 import '../styles/ventas.css';
 
 const formatPrice = (n) =>
   Number(n).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+const ITEMS_PER_PAGE = 10;
 
 export default function Ventas() {
   const [clientes, setClientes] = useState([]);
@@ -34,6 +37,9 @@ export default function Ventas() {
   // Carrito de compras temporal (multi-producto)
   const [carrito, setCarrito] = useState([]);
   const [metodoPago, setMetodoPago] = useState('efectivo');
+
+  // Control de paginación del historial
+  const [paginaActual, setPaginaActual] = useState(1);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -257,6 +263,7 @@ export default function Ventas() {
       setCarrito([]);
       setClienteId('');
       setMetodoPago('efectivo');
+      setPaginaActual(1);
 
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
@@ -272,6 +279,14 @@ export default function Ventas() {
 
   const totalDia = historial.reduce((acc, v) => acc + Number(v.total || 0), 0);
   const productoActivo = catalogo.find(p => p.id_producto === itemActual.id_producto);
+
+  // Lógica de Paginado para el Historial de Hoy
+  const totalPaginas = Math.ceil(historial.length / ITEMS_PER_PAGE) || 1;
+
+  const historialPaginado = useMemo(() => {
+    const inicio = (paginaActual - 1) * ITEMS_PER_PAGE;
+    return historial.slice(inicio, inicio + ITEMS_PER_PAGE);
+  }, [historial, paginaActual]);
 
   return (
     <div className="page-container">
@@ -300,12 +315,10 @@ export default function Ventas() {
         </div>
       )}
 
-       
-<div className="ventas-layout-grid">
-        
+      <div className="ventas-layout-grid">
         {/* ── PANEL IZQUIERDO: Selector de Cliente y Carga de Artículos ── */}
         <div>
-          {/* Tarjeta Cliente con Select Estilizado */}
+          {/* Tarjeta Cliente */}
           <div className="form-card" style={{ marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: '600', color: 'var(--color-text-heading)' }}>
@@ -568,7 +581,6 @@ export default function Ventas() {
             {saving ? 'Facturando ticket...' : <><CheckCircle2 size={16} /> Emitir Factura</>}
           </button>
         </div>
-
       </div>
 
       {/* ── Historial de la Jornada ── */}
@@ -594,7 +606,7 @@ export default function Ventas() {
               </tr>
             </thead>
             <tbody>
-              {historial.map(v => {
+              {historialPaginado.map(v => {
                 const fecha = new Date(v.creado_en);
                 const horaStr = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
                 const cantArticulos = v.ventas_detalle?.reduce((acc, d) => acc + d.cantidad, 0) || 0;
@@ -621,14 +633,63 @@ export default function Ventas() {
               })}
               {historial.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--color-text-muted)' }}>
-                    Sin ventas registradas en la fecha actual.
-                  </td>
-                </tr> 
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--color-text-muted)' }}>
+                    Sin ventas registradas en la fecha actual.
+                  </td>
+                </tr> 
               )}
             </tbody>
           </table>
         </div>
+
+        {/* ── Control de Paginado Historial ── */}
+        {!loading && historial.length > 0 && (
+          <div className="pagination-container">
+            <div className="pagination-info">
+              Mostrando <strong>{(paginaActual - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaActual * ITEMS_PER_PAGE, historial.length)}</strong> de <strong>{historial.length}</strong> tickets
+            </div>
+
+            <div className="pagination-controls">
+              <button
+                type="button"
+                className="pagination-btn"
+                onClick={() => setPaginaActual(p => Math.max(p - 1, 1))}
+                disabled={paginaActual === 1}
+                title="Página anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPaginas || Math.abs(p - paginaActual) <= 1)
+                .map((page, idx, arr) => {
+                  const prev = arr[idx - 1];
+                  return (
+                    <span key={page} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      {prev && page - prev > 1 && <span className="pagination-ellipsis">...</span>}
+                      <button
+                        type="button"
+                        className={`pagination-btn ${paginaActual === page ? 'active' : ''}`}
+                        onClick={() => setPaginaActual(page)}
+                      >
+                        {page}
+                      </button>
+                    </span>
+                  );
+                })}
+
+              <button
+                type="button"
+                className="pagination-btn"
+                onClick={() => setPaginaActual(p => Math.min(p + 1, totalPaginas))}
+                disabled={paginaActual === totalPaginas}
+                title="Página siguiente"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
