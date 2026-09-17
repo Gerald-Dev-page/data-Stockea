@@ -6,7 +6,7 @@ import {
   ShoppingCart, Package, BarChart2,
   FileDown, Calendar, AlertCircle, UserCheck,
   Banknote, Landmark, CreditCard, FileSpreadsheet,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import '../styles/dashboard.css';
 
@@ -16,7 +16,7 @@ const toDateStr = (date) => {
 };
 
 const formatPrice = (n) =>
-  Number(n).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+  Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
 const CHART_COLORS = ['#C9A227', '#2A5A96', '#2E7D5B', '#8B5CF6', '#C98A27', '#0284C7', '#B3402A'];
 
@@ -38,7 +38,6 @@ export default function Dashboard() {
   // Control de paginado
   const [paginaActual, setPaginaActual] = useState(1);
 
-  // Resetear paginado al cambiar cualquier filtro de fecha
   useEffect(() => {
     setPaginaActual(1);
   }, [tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
@@ -72,6 +71,8 @@ export default function Dashboard() {
           creado_en,
           total,
           metodo_pago,
+          estado_pago,
+          fecha_vencimiento,
           clientes ( nombre_razon_social ),
           perfiles ( nombre_completo ),
           ventas_detalle (
@@ -113,6 +114,8 @@ export default function Dashboard() {
           cliente: v.clientes?.nombre_razon_social || 'Consumidor Final',
           operador: v.perfiles?.nombre_completo || 'Operador',
           metodo_pago: v.metodo_pago || 'efectivo',
+          estado_pago: v.estado_pago || 'pagado',
+          fecha_vencimiento: v.fecha_vencimiento || null,
           total: Number(v.total),
           totalUnidades,
           categoriasCount,
@@ -150,20 +153,34 @@ export default function Dashboard() {
     const finAntStr = toDateStr(finAnterior);
     const enRangoAnterior = (f) => f >= inicioAntStr && f <= finAntStr;
 
-    let ingresos = 0, ingresosAnt = 0, ingresosHoy = 0;
-    let transacciones = 0, transaccionesAnt = 0;
+    let ingresosTotales = 0;
+    let cobradoReal = 0;
+    let deudaPendiente = 0;
+
+    let ingresosAnt = 0;
+    let transacciones = 0;
+    let transaccionesAnt = 0;
     const porCategoria = {};
     const pagos = { efectivo: 0, transferencia: 0, cuenta_corriente: 0 };
 
     ventas.forEach(v => {
-      if (v.fecha === hoyStr) ingresosHoy += v.total;
-      
       if (enRango(v.fecha)) {
-        ingresos += v.total;
+        ingresosTotales += v.total;
         transacciones += 1;
 
-        const metodo = v.metodo_pago || 'efectivo';
-        pagos[metodo] = (pagos[metodo] || 0) + v.total;
+        if (v.estado_pago === 'pendiente') {
+          deudaPendiente += v.total;
+        } else {
+          cobradoReal += v.total;
+          // Solo suma al medio líquido si fue cobrado
+          const metodo = v.metodo_pago || 'efectivo';
+          pagos[metodo] = (pagos[metodo] || 0) + v.total;
+        }
+
+        // Si fue cuenta corriente pero ya pagó, se contabiliza
+        if (v.metodo_pago === 'cuenta_corriente') {
+          pagos.cuenta_corriente += v.total;
+        }
 
         Object.entries(v.categoriasCount).forEach(([cat, cant]) => {
           porCategoria[cat] = (porCategoria[cat] || 0) + cant;
@@ -176,7 +193,7 @@ export default function Dashboard() {
       }
     });
 
-    const pctIngresos = ingresosAnt > 0 ? Math.round(((ingresos - ingresosAnt) / ingresosAnt) * 100) : null;
+    const pctIngresos = ingresosAnt > 0 ? Math.round(((ingresosTotales - ingresosAnt) / ingresosAnt) * 100) : null;
     const pctTrans = transaccionesAnt > 0 ? Math.round(((transacciones - transaccionesAnt) / transaccionesAnt) * 100) : null;
     const totalUnidades = Object.values(porCategoria).reduce((a, b) => a + b, 0) || 1;
 
@@ -185,14 +202,20 @@ export default function Dashboard() {
       .map(([nombre, cantidad]) => ({ nombre, cantidad }));
 
     return {
-      ingresosHoy, ingresos, pctIngresos,
-      transacciones, pctTrans,
-      ticketPromedio: transacciones > 0 ? Math.round(ingresos / transacciones) : 0,
-      categoriasOrdenadas, totalUnidades,
+      ingresosTotales,
+      cobradoReal,
+      deudaPendiente,
+      pctIngresos,
+      transacciones,
+      pctTrans,
+      ticketPromedio: transacciones > 0 ? Math.round(ingresosTotales / transacciones) : 0,
+      categoriasOrdenadas,
+      totalUnidades,
       pagos
     };
-  }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin, hoyStr]);
+  }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
 
+  // Gráfico de los últimos 7 días mostrando cobrado real
   const tendencia7d = useMemo(() => {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
@@ -200,7 +223,7 @@ export default function Dashboard() {
       const str = toDateStr(d);
       
       const total = ventas
-        .filter(v => v.fecha === str)
+        .filter(v => v.fecha === str && v.estado_pago !== 'pendiente')
         .reduce((a, v) => a + v.total, 0);
       
       const label = d.toLocaleDateString('es-AR', { weekday: 'short' });
@@ -217,7 +240,6 @@ export default function Dashboard() {
     return ventas.filter(v => enRango(v.fecha));
   }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
 
-  // Paginado en memoria
   const totalPaginas = Math.ceil(ultimasVentas.length / ITEMS_PER_PAGE) || 1;
 
   const ventasPaginadas = useMemo(() => {
@@ -227,7 +249,7 @@ export default function Dashboard() {
 
   const exportarCSV = () => {
     if (ultimasVentas.length === 0) return;
-    const headers = ["ID Venta", "Fecha", "Hora", "Operador", "Cliente", "Articulos", "Unidades", "Medio de Pago", "Total"];
+    const headers = ["ID Venta", "Fecha", "Hora", "Operador", "Cliente", "Articulos", "Unidades", "Medio", "Estado Cobro", "Total"];
     const rows = ultimasVentas.map(v => [
       v.id_venta,
       v.fecha,
@@ -237,6 +259,7 @@ export default function Dashboard() {
       `"${v.productoResumen}"`,
       v.totalUnidades,
       v.metodo_pago,
+      v.estado_pago,
       v.total
     ]);
 
@@ -256,8 +279,8 @@ export default function Dashboard() {
     <div className="page-container dashboard-page">
       <header className="page-header dashboard-header">
         <div>
-          <h2>Panel de Rendimiento</h2>
-          <p>Métricas de facturación, volumen transaccional e inventario en tiempo real.</p>
+          <h2>Panel Financiero y Control de Caja</h2>
+          <p>Supervisión de liquidez real, facturación general y cuentas corrientes.</p>
         </div>
         <div className="dashboard-controls no-print">
           <select
@@ -309,7 +332,7 @@ export default function Dashboard() {
 
       {loading && (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
-          Consolidando métricas operativas...
+          Consolidando arqueo de caja y estados de cobro...
         </div>
       )}
 
@@ -322,19 +345,34 @@ export default function Dashboard() {
 
       {!loading && !error && (
         <>
-          {/* ── KPIs Generales ── */}
-          <div className="kpi-grid">
+          {/* ── KPIs Principales: Líquido vs Deuda vs Total ── */}
+          <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <div className="kpi-card kpi-highlight">
-              <div className="kpi-icon"><DollarSign size={18} /></div>
-              <div className="kpi-label">Ingresos del Día</div>
-              <div className="kpi-value">{formatPrice(metricas.ingresosHoy)}</div>
-              <div className="kpi-sub">Cierre diario 23:59 hs</div>
+              <div className="kpi-icon" style={{ background: 'var(--color-success-soft)', color: '#5EDBA2' }}>
+                <CheckCircle2 size={18} />
+              </div>
+              <div className="kpi-label">Efectivo / Cobrado Real</div>
+              <div className="kpi-value" style={{ color: '#5EDBA2' }}>
+                {formatPrice(metricas.cobradoReal)}
+              </div>
+              <div className="kpi-sub">Dinero ingresado a caja</div>
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon kpi-icon-blue"><TrendingUp size={18} /></div>
-              <div className="kpi-label">Facturación del Período</div>
-              <div className="kpi-value">{formatPrice(metricas.ingresos)}</div>
+              <div className="kpi-icon" style={{ background: 'var(--color-warning-soft)', color: '#FBBF24' }}>
+                <AlertTriangle size={18} />
+              </div>
+              <div className="kpi-label">Pendiente de Cobro (Deuda)</div>
+              <div className="kpi-value" style={{ color: '#FBBF24' }}>
+                {formatPrice(metricas.deudaPendiente)}
+              </div>
+              <div className="kpi-sub">Ventas a plazo en el período</div>
+            </div>
+
+            <div className="kpi-card">
+              <div className="kpi-icon kpi-icon-blue"><DollarSign size={18} /></div>
+              <div className="kpi-label">Facturación Contable Total</div>
+              <div className="kpi-value">{formatPrice(metricas.ingresosTotales)}</div>
               {metricas.pctIngresos !== null && (
                 <div className={`kpi-badge ${metricas.pctIngresos >= 0 ? 'badge-up' : 'badge-down'}`}>
                   {metricas.pctIngresos >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
@@ -345,19 +383,13 @@ export default function Dashboard() {
 
             <div className="kpi-card">
               <div className="kpi-icon kpi-icon-green"><ShoppingCart size={18} /></div>
-              <div className="kpi-label">Transacciones</div>
+              <div className="kpi-label">Operaciones Realizadas</div>
               <div className="kpi-value">{metricas.transacciones}</div>
-              <div className="kpi-sub">Ticket promedio: {formatPrice(metricas.ticketPromedio)}</div>
-              {metricas.pctTrans !== null && (
-                <div className={`kpi-badge ${metricas.pctTrans >= 0 ? 'badge-up' : 'badge-down'}`}>
-                  {metricas.pctTrans >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                  {Math.abs(metricas.pctTrans)}% vs ciclo anterior
-                </div>
-              )}
+              <div className="kpi-sub">Ticket prom: {formatPrice(metricas.ticketPromedio)}</div>
             </div>
           </div>
 
-          {/* ── Desglose de Medios de Pago (Arqueo de Caja) ── */}
+          {/* ── Desglose de Fondos por Medio de Cobro ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
             <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
               <span className="stat-icon" style={{ background: 'var(--color-accent-soft)', color: 'var(--color-accent)' }}>
@@ -365,7 +397,7 @@ export default function Dashboard() {
               </span>
               <div>
                 <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                  Efectivo en Caja
+                  Efectivo Físico Cobrado
                 </p>
                 <p style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-text-heading)', fontVariantNumeric: 'tabular-nums' }}>
                   {formatPrice(metricas.pagos.efectivo)}
@@ -379,7 +411,7 @@ export default function Dashboard() {
               </span>
               <div>
                 <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                  Transferencias
+                  Transferencias Acreditadas
                 </p>
                 <p style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-text-heading)', fontVariantNumeric: 'tabular-nums' }}>
                   {formatPrice(metricas.pagos.transferencia)}
@@ -393,7 +425,7 @@ export default function Dashboard() {
               </span>
               <div>
                 <p style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                  A Cobrar (Cta. Cte.)
+                  Cta. Cte. Total Registrada
                 </p>
                 <p style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-text-heading)', fontVariantNumeric: 'tabular-nums' }}>
                   {formatPrice(metricas.pagos.cuenta_corriente)}
@@ -402,11 +434,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ── Visualización de Tendencias y Categorías ── */}
+          {/* ── Visualización Gráfica y Categorías ── */}
           <div className="dash-modules">
             <div className="dash-module module-wide">
               <div className="module-header">
-                <h3><BarChart2 size={16} style={{ color: 'var(--color-accent)' }} /> Facturación Diaria (Últimos 7 días)</h3>
+                <h3><BarChart2 size={16} style={{ color: 'var(--color-accent)' }} /> Cobranzas Diarias Acreditadas (Últimos 7 días)</h3>
               </div>
               <div className="bar-chart">
                 {tendencia7d.map((d) => {
@@ -462,14 +494,14 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ── Tabla de Operaciones ── */}
+          {/* ── Tabla de Operaciones con Estado de Cobro ── */}
           <div className="card table-card" style={{ marginTop: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 className="table-title" style={{ margin: 0 }}>
                 <Calendar size={15} style={{ color: 'var(--color-accent)' }} /> 
                 Operaciones del Período
               </h3>
-              <span className="table-count">{ultimasVentas.length} transacciones</span>
+              <span className="table-count">{ultimasVentas.length} registros</span>
             </div>
 
             <div className="table-wrapper">
@@ -481,7 +513,7 @@ export default function Dashboard() {
                     <th>Cliente</th>
                     <th>Resumen Artículos</th>
                     <th>Medio</th>
-                    <th>Unidades</th>
+                    <th>Estado de Cobro</th>
                     <th>Total Facturado</th>
                   </tr>
                 </thead>
@@ -492,31 +524,45 @@ export default function Dashboard() {
                         No hay ventas registradas en el período seleccionado.
                       </td>
                     </tr>
-                  ) : ventasPaginadas.map(v => (
-                    <tr key={v.id_venta}>
-                      <td><span className="hora-badge">{v.hora}</span></td>
-                      <td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', color: 'var(--color-text-main)' }}>
-                          <UserCheck size={13} style={{ color: 'var(--color-accent)' }} />
-                          {v.operador}
-                        </span>
-                      </td>
-                      <td className="td-nombre">{v.cliente}</td>
-                      <td className="td-muted">{v.productoResumen}</td>
-                      <td>
-                        <span className="id-badge" style={{ textTransform: 'capitalize' }}>
-                          {v.metodo_pago}
-                        </span>
-                      </td>
-                      <td className="td-muted">{v.totalUnidades}</td>
-                      <td className="td-precio">{formatPrice(v.total)}</td>
-                    </tr>
-                  ))}
+                  ) : ventasPaginadas.map(v => {
+                    const esPend = v.estado_pago === 'pendiente';
+
+                    return (
+                      <tr key={v.id_venta}>
+                        <td><span className="hora-badge">{v.hora}</span></td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', color: 'var(--color-text-main)' }}>
+                            <UserCheck size={13} style={{ color: 'var(--color-accent)' }} />
+                            {v.operador}
+                          </span>
+                        </td>
+                        <td className="td-nombre">{v.cliente}</td>
+                        <td className="td-muted">{v.productoResumen}</td>
+                        <td>
+                          <span className="id-badge" style={{ textTransform: 'capitalize' }}>
+                            {v.metodo_pago}
+                          </span>
+                        </td>
+                        <td>
+                          {esPend ? (
+                            <span className="estado-badge" style={{ background: 'var(--color-warning-soft)', color: '#FBBF24', borderColor: 'rgba(201, 138, 39, 0.4)' }}>
+                              ⏳ Pendiente {v.fecha_vencimiento ? `(${v.fecha_vencimiento.slice(5)})` : ''}
+                            </span>
+                          ) : (
+                            <span className="estado-badge activo">
+                              ✓ Cobrado
+                            </span>
+                          )}
+                        </td>
+                        <td className="td-precio">{formatPrice(v.total)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
-            {/* ── Control de Paginado ── */}
+            {/* Paginación */}
             {ultimasVentas.length > 0 && (
               <div className="pagination-container no-print">
                 <div className="pagination-info">

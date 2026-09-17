@@ -4,12 +4,12 @@ import { supabase } from '../services/supabase';
 import { 
   ShoppingCart, User, Package, Clock, TrendingUp, 
   AlertCircle, Trash2, Plus, CreditCard, Banknote, Landmark, CheckCircle2,
-  ChevronLeft, ChevronRight 
+  ChevronLeft, ChevronRight, Calendar, AlertTriangle
 } from 'lucide-react';
 import '../styles/ventas.css';
 
 const formatPrice = (n) =>
-  Number(n).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+  Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
 const ITEMS_PER_PAGE = 10;
 
@@ -23,20 +23,28 @@ export default function Ventas() {
   const [showToast, setShowToast] = useState(false);
   const [userId, setUserId] = useState(null);
 
-  // Cliente seleccionado (por ID)
+  // Cliente seleccionado
   const [clienteId, setClienteId] = useState('');
 
-  // Formulario selector de ítem actual
+  // Formulario selector de ítem actual con 3 listas mayoristas
   const [itemActual, setItemActual] = useState({
     id_producto: '',
-    tipo_precio: 'minorista',
+    tipo_precio: 'minorista', // 'minorista' | 'mayorista_1' | 'mayorista_2' | 'mayorista_3'
     cantidad: 1,
     precio_unitario: 0
   });
 
-  // Carrito de compras temporal (multi-producto)
+  // Carrito de compras temporal
   const [carrito, setCarrito] = useState([]);
   const [metodoPago, setMetodoPago] = useState('efectivo');
+
+  // Estado de cobro y vencimiento
+  const [esPendiente, setEsPendiente] = useState(false);
+  const [fechaVencimiento, setFechaVencimiento] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15); // 15 días por defecto
+    return d.toISOString().split('T')[0];
+  });
 
   // Control de paginación del historial
   const [paginaActual, setPaginaActual] = useState(1);
@@ -53,18 +61,18 @@ export default function Ventas() {
       setLoading(true);
       setError(null);
 
-      // 1. Clientes
+      // 1. Clientes con saldo deudor
       const { data: dataClientes, error: errClientes } = await supabase
         .from('clientes')
-        .select('id_cliente, nombre_razon_social')
+        .select('id_cliente, nombre_razon_social, saldo_deudor')
         .order('nombre_razon_social', { ascending: true });
       if (errClientes) throw errClientes;
       setClientes(dataClientes || []);
 
-      // 2. Catálogo con stock
+      // 2. Catálogo con las 3 columnas mayoristas
       const { data: dataProductos, error: errProductos } = await supabase
         .from('productos')
-        .select('id_producto, sku, nombre, precio_venta, precio_mayorista, stock_actual, activo, categorias(nombre)')
+        .select('id_producto, sku, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, activo, categorias(nombre)')
         .eq('activo', true)
         .order('nombre', { ascending: true });
       if (errProductos) throw errProductos;
@@ -73,7 +81,7 @@ export default function Ventas() {
       await fetchHistorialDia();
     } catch (err) {
       console.error("Error al cargar ventas:", err.message);
-      setError("Error de conexión al obtener catálogos.");
+      setError("Error de conexión al sincronizar catálogos.");
     } finally {
       setLoading(false);
     }
@@ -91,6 +99,8 @@ export default function Ventas() {
           creado_en,
           total,
           metodo_pago,
+          estado_pago,
+          fecha_vencimiento,
           clientes ( nombre_razon_social ),
           perfiles ( nombre_completo ),
           ventas_detalle (
@@ -109,7 +119,6 @@ export default function Ventas() {
     }
   };
 
-  // Asignar rápidamente Consumidor Final
   const handleAsignarConsumidorFinal = () => {
     const cf = clientes.find(c => c.nombre_razon_social.toLowerCase().includes('consumidor final'));
     if (cf) {
@@ -119,18 +128,24 @@ export default function Ventas() {
     }
   };
 
-  // Manejo de selección de producto
+  // Helper para resolver precio según lista seleccionada
+  const resolverPrecio = (prod, tipo) => {
+    if (!prod) return 0;
+    if (tipo === 'minorista') return Number(prod.precio_venta || 0);
+    if (tipo === 'mayorista_1') return Number(prod.precio_mayorista_1 || prod.precio_mayorista || 0);
+    if (tipo === 'mayorista_2') return Number(prod.precio_mayorista_2 || prod.precio_mayorista_1 || prod.precio_venta || 0);
+    if (tipo === 'mayorista_3') return Number(prod.precio_mayorista_3 || prod.precio_mayorista_1 || prod.precio_venta || 0);
+    return Number(prod.precio_venta || 0);
+  };
+
   const handleProductoChange = (e) => {
     const id = e.target.value;
-    const prod = catalogo.find(p => p.id_producto === id);
+    const prod = catalogo.find(p => String(p.id_producto) === String(id));
     if (!prod) {
       setItemActual({ id_producto: '', tipo_precio: 'minorista', cantidad: 1, precio_unitario: 0 });
       return;
     }
-    const precio = itemActual.tipo_precio === 'mayorista' && Number(prod.precio_mayorista) > 0
-      ? Number(prod.precio_mayorista)
-      : Number(prod.precio_venta);
-
+    const precio = resolverPrecio(prod, itemActual.tipo_precio);
     setItemActual(prev => ({
       ...prev,
       id_producto: id,
@@ -140,11 +155,8 @@ export default function Ventas() {
 
   const handleTipoPrecioChange = (e) => {
     const tipo = e.target.value;
-    const prod = catalogo.find(p => p.id_producto === itemActual.id_producto);
-    const precio = prod
-      ? (tipo === 'mayorista' && Number(prod.precio_mayorista) > 0 ? Number(prod.precio_mayorista) : Number(prod.precio_venta))
-      : 0;
-
+    const prod = catalogo.find(p => String(p.id_producto) === String(itemActual.id_producto));
+    const precio = resolverPrecio(prod, tipo);
     setItemActual(prev => ({
       ...prev,
       tipo_precio: tipo,
@@ -152,13 +164,12 @@ export default function Ventas() {
     }));
   };
 
-  // Agregar al carrito
   const handleAgregarAlCarrito = () => {
     if (!itemActual.id_producto || itemActual.cantidad <= 0) return;
-    const prod = catalogo.find(p => p.id_producto === itemActual.id_producto);
+    const prod = catalogo.find(p => String(p.id_producto) === String(itemActual.id_producto));
     if (!prod) return;
 
-    const yaEnCarrito = carrito.find(i => i.id_producto === prod.id_producto);
+    const yaEnCarrito = carrito.find(i => String(i.id_producto) === String(prod.id_producto));
     const cantidadTotal = (yaEnCarrito?.cantidad || 0) + itemActual.cantidad;
 
     if (cantidadTotal > prod.stock_actual) {
@@ -168,8 +179,15 @@ export default function Ventas() {
 
     setError(null);
 
+    const etiquetaTipo = {
+      minorista: 'Minorista',
+      mayorista_1: 'Mayorista 1',
+      mayorista_2: 'Mayorista 2',
+      mayorista_3: 'Mayorista 3'
+    }[itemActual.tipo_precio];
+
     if (yaEnCarrito) {
-      setCarrito(carrito.map(i => i.id_producto === prod.id_producto
+      setCarrito(carrito.map(i => String(i.id_producto) === String(prod.id_producto)
         ? { ...i, cantidad: i.cantidad + itemActual.cantidad, total: (i.cantidad + itemActual.cantidad) * i.precio_unitario }
         : i
       ));
@@ -178,26 +196,34 @@ export default function Ventas() {
         id_producto: prod.id_producto,
         sku: prod.sku,
         nombre: prod.nombre,
-        tipo_precio: itemActual.tipo_precio,
+        tipo_precio: etiquetaTipo,
         cantidad: itemActual.cantidad,
         precio_unitario: itemActual.precio_unitario,
         total: itemActual.cantidad * itemActual.precio_unitario
       }]);
     }
 
-    setItemActual({ id_producto: '', tipo_precio: 'minorista', cantidad: 1, precio_unitario: 0 });
+    setItemActual({ id_producto: '', tipo_precio: itemActual.tipo_precio, cantidad: 1, precio_unitario: 0 });
   };
 
   const handleEliminarItemCarrito = (id_producto) => {
-    setCarrito(carrito.filter(i => i.id_producto !== id_producto));
+    setCarrito(carrito.filter(i => String(i.id_producto) !== String(id_producto)));
   };
 
   const totalFactura = carrito.reduce((acc, i) => acc + i.total, 0);
 
-  // Confirmar Venta Completa
+  // Auto activar "pendiente de pago" al seleccionar cuenta corriente
+  const handleSeleccionarMetodoPago = (metodo) => {
+    setMetodoPago(metodo);
+    if (metodo === 'cuenta_corriente') {
+      setEsPendiente(true);
+    }
+  };
+
+  // Confirmar Venta
   const handleConfirmarVenta = async () => {
     if (!clienteId) {
-      setError("Debe seleccionar un cliente registrado o presionar '+ Consumidor Final'.");
+      setError("Debe seleccionar un cliente antes de emitir la venta.");
       return;
     }
     if (carrito.length === 0) {
@@ -205,7 +231,7 @@ export default function Ventas() {
       return;
     }
     if (!userId) {
-      setError("Sesión de operador no válida. Inicie sesión nuevamente.");
+      setError("Sesión de operador no válida. Reingrese al sistema.");
       return;
     }
 
@@ -213,6 +239,13 @@ export default function Ventas() {
     setError(null);
 
     try {
+      const clienteSeleccionado = clientes.find(c => String(c.id_cliente) === String(clienteId));
+      const esConsumidorFinal = clienteSeleccionado?.nombre_razon_social?.toLowerCase().includes('consumidor final');
+
+      if (esPendiente && esConsumidorFinal) {
+        throw new Error("No se puede emitir una venta pendiente de pago a Consumidor Final. Seleccione o registre un cliente con nombre/razón social.");
+      }
+
       // 1. Insertar Cabecera de Venta
       const { data: ventaReq, error: errVenta } = await supabase
         .from('ventas')
@@ -220,7 +253,9 @@ export default function Ventas() {
           cliente_id: clienteId,
           usuario_id: userId,
           total: totalFactura,
-          metodo_pago: metodoPago
+          metodo_pago: metodoPago,
+          estado_pago: esPendiente ? 'pendiente' : 'pagado',
+          fecha_vencimiento: esPendiente ? fechaVencimiento : null
         }])
         .select()
         .single();
@@ -239,9 +274,9 @@ export default function Ventas() {
         .insert(detallesInsert);
       if (errDetalles) throw errDetalles;
 
-      // 3. Descontar Stock y Registrar Movimiento de Auditoría
+      // 3. Descontar Stock y Registrar Auditoría
       for (const item of carrito) {
-        const prod = catalogo.find(p => p.id_producto === item.id_producto);
+        const prod = catalogo.find(p => String(p.id_producto) === String(item.id_producto));
         const nuevoStock = (prod?.stock_actual || 0) - item.cantidad;
 
         await supabase
@@ -259,10 +294,22 @@ export default function Ventas() {
           }]);
       }
 
+      // 4. Si es pendiente, sumar deuda a la ficha de Clientes
+      if (esPendiente && clienteSeleccionado) {
+        const saldoPrevio = Number(clienteSeleccionado.saldo_deudor || 0);
+        const nuevoSaldo = saldoPrevio + totalFactura;
+
+        await supabase
+          .from('clientes')
+          .update({ saldo_deudor: nuevoSaldo })
+          .eq('id_cliente', clienteId);
+      }
+
       // Reset
       setCarrito([]);
       setClienteId('');
       setMetodoPago('efectivo');
+      setEsPendiente(false);
       setPaginaActual(1);
 
       setShowToast(true);
@@ -271,18 +318,17 @@ export default function Ventas() {
       fetchInitialData();
     } catch (err) {
       console.error("Error al procesar venta:", err.message);
-      setError("No se pudo completar la operación: " + err.message);
+      setError(err.message || "Error al completar la venta.");
     } finally {
       setSaving(false);
     }
   };
 
   const totalDia = historial.reduce((acc, v) => acc + Number(v.total || 0), 0);
-  const productoActivo = catalogo.find(p => p.id_producto === itemActual.id_producto);
+  const productoActivo = catalogo.find(p => String(p.id_producto) === String(itemActual.id_producto));
+  const clienteActivo = clientes.find(c => String(c.id_cliente) === String(clienteId));
 
-  // Lógica de Paginado para el Historial de Hoy
   const totalPaginas = Math.ceil(historial.length / ITEMS_PER_PAGE) || 1;
-
   const historialPaginado = useMemo(() => {
     const inicio = (paginaActual - 1) * ITEMS_PER_PAGE;
     return historial.slice(inicio, inicio + ITEMS_PER_PAGE);
@@ -293,17 +339,17 @@ export default function Ventas() {
       <header className="page-header">
         <div>
           <h2>Punto de Venta</h2>
-          <p>Facturación multi-producto con selección de medio de pago y deducción automática de stock.</p>
+          <p>Facturación con escalas mayoristas, medios de cobro y registro de cuentas corrientes.</p>
         </div>
         <div className="header-badge">
           <TrendingUp size={14} />
-          {formatPrice(totalDia)} recaudado hoy
+          {formatPrice(totalDia)} facturado hoy
         </div>
       </header>
 
       {showToast && (
         <div className="demo-toast">
-          ✓ Venta facturada e inventario actualizado exitosamente.
+          ✓ Venta registrada con éxito en el sistema.
         </div>
       )}
 
@@ -316,7 +362,7 @@ export default function Ventas() {
       )}
 
       <div className="ventas-layout-grid">
-        {/* ── PANEL IZQUIERDO: Selector de Cliente y Carga de Artículos ── */}
+        {/* ── PANEL IZQUIERDO: Selección y Artículos ── */}
         <div>
           {/* Tarjeta Cliente */}
           <div className="form-card" style={{ marginBottom: '1.25rem' }}>
@@ -351,11 +397,17 @@ export default function Ventas() {
                 <option value="">— Seleccione un cliente —</option>
                 {clientes.map(c => (
                   <option key={c.id_cliente} value={c.id_cliente}>
-                    {c.nombre_razon_social}
+                    {c.nombre_razon_social} {Number(c.saldo_deudor || 0) > 0 ? `(Deuda: ${formatPrice(c.saldo_deudor)})` : ''}
                   </option>
                 ))}
               </select>
             </div>
+
+            {clienteActivo && Number(clienteActivo.saldo_deudor || 0) > 0 && (
+              <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#F87171', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <AlertTriangle size={13} /> Saldo deudor acumulado: <strong>{formatPrice(clienteActivo.saldo_deudor)}</strong>
+              </div>
+            )}
           </div>
 
           {/* Tarjeta Agregar Producto */}
@@ -383,12 +435,14 @@ export default function Ventas() {
               </select>
             </div>
 
-            <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div className="form-row" style={{ gridTemplateColumns: '1.2fr 1fr 1fr' }}>
               <div className="form-group">
-                <label>Lista</label>
+                <label>Lista de Precio</label>
                 <select value={itemActual.tipo_precio} onChange={handleTipoPrecioChange} disabled={!itemActual.id_producto || saving}>
                   <option value="minorista">Minorista</option>
-                  <option value="mayorista">Mayorista</option>
+                  <option value="mayorista_1">Mayorista 1 (Base)</option>
+                  <option value="mayorista_2">Mayorista 2 (Volumen)</option>
+                  <option value="mayorista_3">Mayorista 3 (Distrib.)</option>
                 </select>
               </div>
 
@@ -427,7 +481,7 @@ export default function Ventas() {
           </div>
         </div>
 
-        {/* ── PANEL DERECHO: Resumen de Ticket y Medios de Pago ── */}
+        {/* ── PANEL DERECHO: Resumen del Ticket y Cobro ── */}
         <div className="form-card" style={{ border: '1px solid rgba(201, 162, 39, 0.3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 className="form-title" style={{ margin: 0 }}>
@@ -438,8 +492,7 @@ export default function Ventas() {
             </span>
           </div>
 
-          {/* Lista de ítems en carrito */}
-          <div style={{ maxHeight: '240px', overflowY: 'auto', marginBottom: '1rem' }}>
+          <div style={{ maxHeight: '220px', overflowY: 'auto', marginBottom: '1rem' }}>
             {carrito.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
                 El carrito está vacío. Agregue productos desde el panel izquierdo.
@@ -487,13 +540,13 @@ export default function Ventas() {
             )}
           </div>
 
-          {/* Selección de Medio de Pago */}
-          <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+          {/* Medio de Pago */}
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label>Medio de Cobro</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginTop: '0.35rem' }}>
               <button
                 type="button"
-                onClick={() => setMetodoPago('efectivo')}
+                onClick={() => handleSeleccionarMetodoPago('efectivo')}
                 style={{
                   padding: '8px 6px',
                   borderRadius: 'var(--radius-sm)',
@@ -515,7 +568,7 @@ export default function Ventas() {
 
               <button
                 type="button"
-                onClick={() => setMetodoPago('transferencia')}
+                onClick={() => handleSeleccionarMetodoPago('transferencia')}
                 style={{
                   padding: '8px 6px',
                   borderRadius: 'var(--radius-sm)',
@@ -537,7 +590,7 @@ export default function Ventas() {
 
               <button
                 type="button"
-                onClick={() => setMetodoPago('cuenta_corriente')}
+                onClick={() => handleSeleccionarMetodoPago('cuenta_corriente')}
                 style={{
                   padding: '8px 6px',
                   borderRadius: 'var(--radius-sm)',
@@ -559,11 +612,39 @@ export default function Ventas() {
             </div>
           </div>
 
+          {/* Bloque: Pendiente de Pago y Vencimiento */}
+          <div style={{ padding: '0.75rem', background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', marginBottom: '1rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0, fontSize: '0.82rem', fontWeight: 600, color: esPendiente ? '#FBBF24' : 'var(--color-text-heading)' }}>
+              <input 
+                type="checkbox" 
+                checked={esPendiente} 
+                onChange={(e) => setEsPendiente(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--color-accent)', cursor: 'pointer' }}
+              />
+              Dejar como Venta Pendiente de Pago (Deuda)
+            </label>
+
+            {esPendiente && (
+              <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Calendar size={13} /> Fecha límite / Vencimiento:
+                </span>
+                <input 
+                  type="date" 
+                  value={fechaVencimiento} 
+                  onChange={(e) => setFechaVencimiento(e.target.value)}
+                  style={{ height: '36px', fontSize: '0.85rem' }}
+                  required
+                />
+              </div>
+            )}
+          </div>
+
           {/* Gran Total */}
           <div style={{ background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '1rem', marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Total a Cobrar
+                Total a Facturar
               </span>
               <strong style={{ fontSize: '1.5rem', color: 'var(--color-accent)', fontVariantNumeric: 'tabular-nums' }}>
                 {formatPrice(totalFactura)}
@@ -578,19 +659,19 @@ export default function Ventas() {
             disabled={saving || !clienteId || carrito.length === 0}
             style={{ padding: '12px' }}
           >
-            {saving ? 'Facturando ticket...' : <><CheckCircle2 size={16} /> Emitir Factura</>}
+            {saving ? 'Procesando venta...' : <><CheckCircle2 size={16} /> Emitir Comprobante</>}
           </button>
         </div>
       </div>
 
-      {/* ── Historial de la Jornada ── */}
+      {/* ── Historial de Hoy ── */}
       <div className="card table-card" style={{ marginTop: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h3 className="table-title" style={{ margin: 0 }}>
             <Clock size={15} style={{ color: 'var(--color-accent)' }} /> 
             Ventas Registradas Hoy
           </h3>
-          <span className="table-count">{historial.length} tickets</span>
+          <span className="table-count">{historial.length} operaciones</span>
         </div>
 
         <div className="table-wrapper">
@@ -600,8 +681,9 @@ export default function Ventas() {
                 <th>Hora</th>
                 <th>Operador</th>
                 <th>Cliente</th>
-                <th>Detalle Artículos</th>
+                <th>Artículos</th>
                 <th>Medio</th>
+                <th>Estado</th>
                 <th>Total</th>
               </tr>
             </thead>
@@ -610,7 +692,8 @@ export default function Ventas() {
                 const fecha = new Date(v.creado_en);
                 const horaStr = fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
                 const cantArticulos = v.ventas_detalle?.reduce((acc, d) => acc + d.cantidad, 0) || 0;
-                
+                const esPend = v.estado_pago === 'pendiente';
+
                 return (
                   <tr key={v.id_venta}>
                     <td><span className="hora-badge">{horaStr}</span></td>
@@ -627,14 +710,23 @@ export default function Ventas() {
                         {v.metodo_pago || 'Efectivo'}
                       </span>
                     </td>
+                    <td>
+                      {esPend ? (
+                        <span className="estado-badge" style={{ background: 'var(--color-warning-soft)', color: '#FBBF24', borderColor: 'rgba(201, 138, 39, 0.4)' }}>
+                          Pendiente {v.fecha_vencimiento ? `(${v.fecha_vencimiento.slice(5)})` : ''}
+                        </span>
+                      ) : (
+                        <span className="estado-badge activo">Cobrado</span>
+                      )}
+                    </td>
                     <td className="td-precio">{formatPrice(v.total)}</td>
                   </tr>
                 );
               })}
               {historial.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--color-text-muted)' }}>
-                    Sin ventas registradas en la fecha actual.
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--color-text-muted)' }}>
+                    Sin operaciones registradas en el día de hoy.
                   </td>
                 </tr> 
               )}
@@ -642,11 +734,11 @@ export default function Ventas() {
           </table>
         </div>
 
-        {/* ── Control de Paginado Historial ── */}
+        {/* Paginación del Historial */}
         {!loading && historial.length > 0 && (
           <div className="pagination-container">
             <div className="pagination-info">
-              Mostrando <strong>{(paginaActual - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaActual * ITEMS_PER_PAGE, historial.length)}</strong> de <strong>{historial.length}</strong> tickets
+              Mostrando <strong>{(paginaActual - 1) * ITEMS_PER_PAGE + 1}</strong> a <strong>{Math.min(paginaActual * ITEMS_PER_PAGE, historial.length)}</strong> de <strong>{historial.length}</strong> operaciones
             </div>
 
             <div className="pagination-controls">

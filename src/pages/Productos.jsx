@@ -6,7 +6,7 @@ import {
   Package, PlusCircle, LayoutGrid, DollarSign, 
   AlertCircle, Edit, X, Check, Search, Filter, 
   Eye, Truck, Percent, Wand2, Maximize2,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Settings, Trash2
 } from 'lucide-react';
 
 const formatPrice = (n) =>
@@ -40,11 +40,14 @@ export default function Productos() {
   // Paginado
   const [paginaActual, setPaginaActual] = useState(1);
 
-  // Categoría inline
+  // Categorías: Creación y Edición Modal
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [editCategoryName, setEditCategoryName] = useState('');
 
-  // Formulario de Alta
+  // Formulario de Alta con 3 Mayoristas
   const [formData, setFormData] = useState({
     sku: '',
     codigo_barras: '',
@@ -64,8 +67,10 @@ export default function Productos() {
     impuestos_aduana: '',  // en USD
     nacionalizacion: '',   // en USD
     flete_local: '',       // en USD
-    precio_venta: '',      // en ARS
-    precio_mayorista: '',  // en ARS
+    precio_venta: '',        // Minorista ARS
+    precio_mayorista_1: '',  // Mayorista 1 ARS
+    precio_mayorista_2: '',  // Mayorista 2 ARS
+    precio_mayorista_3: '',  // Mayorista 3 ARS
     stock_minimo: '5',
     stock_inicial: '0',
     fotos: []
@@ -83,7 +88,6 @@ export default function Productos() {
     fetchCotizacion();
   }, []);
 
-  // Reiniciar a la primera página si cambian los filtros
   useEffect(() => {
     setPaginaActual(1);
   }, [busqueda, categoriaFiltro]);
@@ -193,7 +197,7 @@ export default function Productos() {
     }
   };
 
-  // Cálculo en USD
+  // Cálculo de Costos
   const calcularCostoUSD = (data) => {
     const cOrigen = parseFloat(data.costo_origen) || 0;
     const fleteInt = parseFloat(data.flete_int) || 0;
@@ -206,12 +210,20 @@ export default function Productos() {
   const costoTotalUSD = calcularCostoUSD(formData);
   const costoTotalARS = Math.round(costoTotalUSD * (Number(cotizacionDolar) || 1));
 
+  // Márgenes formulario de alta
   const margenMinorista = (parseFloat(formData.precio_venta) || 0) - costoTotalARS;
-  const rentabilidadMinorista = costoTotalARS > 0 ? Math.round((margenMinorista / costoTotalARS) * 100) : 0;
-  const margenMayorista = (parseFloat(formData.precio_mayorista) || 0) - costoTotalARS;
-  const rentabilidadMayorista = costoTotalARS > 0 ? Math.round((margenMayorista / costoTotalARS) * 100) : 0;
+  const rentMinorista = costoTotalARS > 0 ? Math.round((margenMinorista / costoTotalARS) * 100) : 0;
+  
+  const margenM1 = (parseFloat(formData.precio_mayorista_1) || 0) - costoTotalARS;
+  const rentM1 = costoTotalARS > 0 ? Math.round((margenM1 / costoTotalARS) * 100) : 0;
 
-  // Subida de imagen comprimida
+  const margenM2 = (parseFloat(formData.precio_mayorista_2) || 0) - costoTotalARS;
+  const rentM2 = costoTotalARS > 0 ? Math.round((margenM2 / costoTotalARS) * 100) : 0;
+
+  const margenM3 = (parseFloat(formData.precio_mayorista_3) || 0) - costoTotalARS;
+  const rentM3 = costoTotalARS > 0 ? Math.round((margenM3 / costoTotalARS) * 100) : 0;
+
+  // Subida de imagen
   const handleSubirFoto = async (e, isEdit = false) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -243,7 +255,7 @@ export default function Productos() {
         setFormData(prev => ({ ...prev, fotos: [...prev.fotos, publicUrl] }));
       }
 
-      showNotification("Imagen procesada y subida en formato WebP.");
+      showNotification("Imagen WebP subida exitosamente.");
     } catch (err) {
       console.error("Error al procesar foto:", err.message);
       setError("Error al subir imagen: " + err.message);
@@ -252,6 +264,7 @@ export default function Productos() {
     }
   };
 
+  // Creación rápida de categoría
   const handleSaveCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
@@ -271,6 +284,48 @@ export default function Productos() {
       setError("Error al crear categoría: " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Modificación de Categoría existente
+  const handleUpdateCategory = async (id) => {
+    if (!editCategoryName.trim()) return;
+    try {
+      const { error } = await supabase
+        .from('categorias')
+        .update({ nombre: editCategoryName.trim() })
+        .eq('id', id);
+      if (error) throw error;
+
+      setCategorias(prev => prev.map(c => c.id === id ? { ...c, nombre: editCategoryName.trim() } : c));
+      setEditingCategory(null);
+      setEditCategoryName('');
+      showNotification("Categoría modificada correctamente.");
+      fetchInitialData();
+    } catch (err) {
+      setError("Error al modificar categoría: " + err.message);
+    }
+  };
+
+  // Eliminación de Categoría
+  const handleDeleteCategory = async (id) => {
+    const tieneProductos = productos.some(p => p.categoria_id === id);
+    if (tieneProductos) {
+      setError("No se puede eliminar la categoría porque contiene productos asignados.");
+      return;
+    }
+
+    if (!confirm("¿Está seguro de eliminar esta categoría?")) return;
+
+    try {
+      const { error } = await supabase.from('categorias').delete().eq('id', id);
+      if (error) throw error;
+
+      setCategorias(prev => prev.filter(c => c.id !== id));
+      showNotification("Categoría eliminada.");
+      fetchInitialData();
+    } catch (err) {
+      setError("Error al eliminar categoría: " + err.message);
     }
   };
 
@@ -313,7 +368,10 @@ export default function Productos() {
         },
         costo_unitario: costoFinalUSD > 0 ? costoFinalUSD : (parseFloat(formData.costo_origen) || 0),
         precio_venta: parseFloat(formData.precio_venta),
-        precio_mayorista: parseFloat(formData.precio_mayorista) || 0,
+        precio_mayorista: parseFloat(formData.precio_mayorista_1) || 0,
+        precio_mayorista_1: parseFloat(formData.precio_mayorista_1) || 0,
+        precio_mayorista_2: parseFloat(formData.precio_mayorista_2) || 0,
+        precio_mayorista_3: parseFloat(formData.precio_mayorista_3) || 0,
         stock_minimo: parseInt(formData.stock_minimo) || 0,
         stock_actual: stockInicialVal,
         fotos: formData.fotos,
@@ -362,13 +420,15 @@ export default function Productos() {
         nacionalizacion: '',
         flete_local: '',
         precio_venta: '',
-        precio_mayorista: '',
+        precio_mayorista_1: '',
+        precio_mayorista_2: '',
+        precio_mayorista_3: '',
         stock_minimo: '5',
         stock_inicial: '0',
         fotos: []
       });
 
-      showNotification("Producto y costeo guardados exitosamente.");
+      showNotification("Producto guardado con 3 precios mayoristas.");
       fetchInitialData();
     } catch (err) {
       console.error("Error al registrar producto:", err.message);
@@ -389,6 +449,9 @@ export default function Productos() {
       impuestos_aduana: g.impuestos_aduana || '',
       nacionalizacion: g.nacionalizacion || '',
       flete_local: g.flete_local || '',
+      precio_mayorista_1: p.precio_mayorista_1 || p.precio_mayorista || '',
+      precio_mayorista_2: p.precio_mayorista_2 || '',
+      precio_mayorista_3: p.precio_mayorista_3 || '',
       fotos: p.fotos || []
     });
   };
@@ -404,6 +467,7 @@ export default function Productos() {
       const updatePayload = {
         sku: editFormData.sku,
         nombre: editFormData.nombre,
+        categoria_id: parseInt(editFormData.categoria_id),
         codigo_barras: editFormData.codigo_barras || null,
         subcategoria: editFormData.subcategoria || null,
         marca: editFormData.marca || null,
@@ -423,7 +487,10 @@ export default function Productos() {
         },
         costo_unitario: costoFinalUSD > 0 ? costoFinalUSD : (parseFloat(editFormData.costo_origen) || 0),
         precio_venta: parseFloat(editFormData.precio_venta),
-        precio_mayorista: parseFloat(editFormData.precio_mayorista) || 0,
+        precio_mayorista: parseFloat(editFormData.precio_mayorista_1) || 0,
+        precio_mayorista_1: parseFloat(editFormData.precio_mayorista_1) || 0,
+        precio_mayorista_2: parseFloat(editFormData.precio_mayorista_2) || 0,
+        precio_mayorista_3: parseFloat(editFormData.precio_mayorista_3) || 0,
         stock_minimo: parseInt(editFormData.stock_minimo) || 0,
         activo: editFormData.activo,
         fotos: editFormData.fotos
@@ -437,7 +504,7 @@ export default function Productos() {
       if (updErr) throw updErr;
 
       setEditingProduct(null);
-      showNotification("Ficha técnica actualizada.");
+      showNotification("Ficha técnica actualizada con éxito.");
       fetchInitialData();
     } catch (err) {
       console.error(err);
@@ -447,7 +514,7 @@ export default function Productos() {
     }
   };
 
-  // Filtrado de tabla
+  // Filtrado
   const productosFiltrados = useMemo(() => {
     return productos.filter(p => {
       const texto = `${p.nombre} ${p.sku} ${p.codigo_barras || ''} ${p.marca || ''}`.toLowerCase();
@@ -457,7 +524,6 @@ export default function Productos() {
     });
   }, [productos, busqueda, categoriaFiltro]);
 
-  // Paginado en memoria
   const totalPaginas = Math.ceil(productosFiltrados.length / ITEMS_PER_PAGE) || 1;
 
   const productosPaginados = useMemo(() => {
@@ -472,10 +538,10 @@ export default function Productos() {
       <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem' }}>
         <div>
           <h2>Gestión de Catálogo y Costeo</h2>
-          <p>Fichas técnicas maestras, costeo de importación multimoneda y rentabilidad real.</p>
+          <p>Fichas técnicas maestras, costeo multimoneda y escalas mayoristas.</p>
         </div>
 
-        {/* ── Widget Cotización Dólar Hoy con Botón Táctil ── */}
+        {/* ── Widget Cotización Dólar ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--color-bg-card)', border: '1px solid rgba(201, 162, 39, 0.35)', padding: '6px 12px', borderRadius: 'var(--radius-sm)' }}>
           <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             USD Hoy:
@@ -525,9 +591,7 @@ export default function Productos() {
         </div>
       </header>
 
-      {showToast && (
-        <div className="demo-toast">✓ {toastMessage}</div>
-      )}
+      {showToast && <div className="demo-toast">✓ {toastMessage}</div>}
 
       {error && (
         <div className="demo-toast" style={{ background: 'var(--color-error-soft)', borderColor: 'rgba(179, 64, 42, 0.4)', color: '#F87171' }}>
@@ -572,12 +636,22 @@ export default function Productos() {
           </div>
         </div>
 
-        <div className="stat-card">
+        <div className="stat-card" style={{ position: 'relative' }}>
           <span className="stat-icon" style={{ background: 'rgba(42, 90, 150, 0.15)', color: '#6EA8FE' }}>
             <LayoutGrid size={18} />
           </span>
-          <div>
-            <p className="stat-label">Categorías</p>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p className="stat-label">Categorías</p>
+              <button
+                type="button"
+                onClick={() => setShowCategoryModal(true)}
+                style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', padding: 0 }}
+                title="Modificar o administrar categorías"
+              >
+                <Settings size={13} /> Gestionar
+              </button>
+            </div>
             <p className="stat-value">{categorias.length}</p>
           </div>
         </div>
@@ -728,32 +802,54 @@ export default function Productos() {
             </div>
           </div>
 
-          {/* Bloque 3: Precios en PESOS */}
+          {/* Bloque 3: Precios en PESOS (Minorista + 3 Mayoristas) */}
           <div style={{ marginTop: '1.25rem', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-accent)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Percent size={15} /> 3. Precios de Venta (ARS) y Rentabilidad Real
           </div>
 
-          <div className="form-row" style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr' }}>
+          <div className="form-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
             <div className="form-group">
-              <label>Precio Venta Minorista (ARS)</label>
+              <label>P. Minorista (ARS)</label>
               <input type="number" step="0.01" min="0" name="precio_venta" placeholder="Ej: 10000" value={formData.precio_venta} onChange={handleChange} required />
               {costoTotalARS > 0 && (
                 <span style={{ fontSize: '0.72rem', color: margenMinorista >= 0 ? '#5EDBA2' : '#F87171', marginTop: '3px', display: 'block' }}>
-                  Ganancia: <strong>{formatPrice(margenMinorista)}</strong> ({rentabilidadMinorista}%)
+                  {formatPrice(margenMinorista)} ({rentMinorista}%)
                 </span>
               )}
             </div>
 
             <div className="form-group">
-              <label>Precio Mayorista (ARS)</label>
-              <input type="number" step="0.01" min="0" name="precio_mayorista" placeholder="Ej: 8000" value={formData.precio_mayorista} onChange={handleChange} />
+              <label>Mayorista 1 (Base)</label>
+              <input type="number" step="0.01" min="0" name="precio_mayorista_1" placeholder="Ej: 8000" value={formData.precio_mayorista_1} onChange={handleChange} />
               {costoTotalARS > 0 && (
-                <span style={{ fontSize: '0.72rem', color: margenMayorista >= 0 ? '#6EA8FE' : '#F87171', marginTop: '3px', display: 'block' }}>
-                  Ganancia: <strong>{formatPrice(margenMayorista)}</strong> ({rentabilidadMayorista}%)
+                <span style={{ fontSize: '0.72rem', color: margenM1 >= 0 ? '#6EA8FE' : '#F87171', marginTop: '3px', display: 'block' }}>
+                  {formatPrice(margenM1)} ({rentM1}%)
                 </span>
               )}
             </div>
 
+            <div className="form-group">
+              <label>Mayorista 2 (Volumen)</label>
+              <input type="number" step="0.01" min="0" name="precio_mayorista_2" placeholder="Ej: 7500" value={formData.precio_mayorista_2} onChange={handleChange} />
+              {costoTotalARS > 0 && (
+                <span style={{ fontSize: '0.72rem', color: margenM2 >= 0 ? '#6EA8FE' : '#F87171', marginTop: '3px', display: 'block' }}>
+                  {formatPrice(margenM2)} ({rentM2}%)
+                </span>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label>Mayorista 3 (Distrib.)</label>
+              <input type="number" step="0.01" min="0" name="precio_mayorista_3" placeholder="Ej: 7000" value={formData.precio_mayorista_3} onChange={handleChange} />
+              {costoTotalARS > 0 && (
+                <span style={{ fontSize: '0.72rem', color: margenM3 >= 0 ? '#6EA8FE' : '#F87171', marginTop: '3px', display: 'block' }}>
+                  {formatPrice(margenM3)} ({rentM3}%)
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="form-row" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '0.5rem' }}>
             <div className="form-group">
               <label>Stock Inicial</label>
               <input type="number" min="0" name="stock_inicial" value={formData.stock_inicial} onChange={handleChange} required />
@@ -796,7 +892,7 @@ export default function Productos() {
         </form>
       </div>
 
-      {/* ── Catálogo Maestro con Fotos Ampliables y Costo Dual ── */}
+      {/* ── Catálogo Maestro ── */}
       <div className="card table-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <h3 className="table-title" style={{ margin: 0 }}>Catálogo Centralizado</h3>
@@ -835,11 +931,11 @@ export default function Productos() {
               <thead>
                 <tr>
                   <th>Foto</th>
-                  <th>SKU / Barras</th>
+                  <th>SKU</th>
                   <th>Artículo</th>
                   <th>Costo Real</th>
-                  <th>Minorista (Rent.)</th>
-                  <th>Mayorista (Rent.)</th>
+                  <th>Minorista</th>
+                  <th>Mayoristas (M1 / M2 / M3)</th>
                   <th>Físico</th>
                   <th>Estado</th>
                   <th>Ficha</th>
@@ -850,21 +946,18 @@ export default function Productos() {
                   const gastos = p.gastos_importacion || {};
                   const costoOrigen = Number(p.costo_origen) || 0;
                   
-                  // Obtener costo base en USD
                   const costoUSD = costoOrigen > 0
                     ? costoOrigen + (Number(gastos.flete_int) || 0) + (Number(gastos.impuestos_aduana) || 0) + (Number(gastos.nacionalizacion) || 0) + (Number(gastos.flete_local) || 0)
                     : Number(p.costo_unitario) || 0;
 
-                  // Conversión a pesos según cotización actual del dólar
                   const costoARS = Math.round(costoUSD * (Number(cotizacionDolar) || 1));
 
-                  // Precios en ARS
                   const pMin = Number(p.precio_venta || 0);
-                  const pMay = Number(p.precio_mayorista || 0);
+                  const pM1 = Number(p.precio_mayorista_1 || p.precio_mayorista || 0);
+                  const pM2 = Number(p.precio_mayorista_2 || 0);
+                  const pM3 = Number(p.precio_mayorista_3 || 0);
 
-                  // Rentabilidad real
                   const rentMin = costoARS > 0 ? Math.round(((pMin - costoARS) / costoARS) * 100) : 0;
-                  const rentMay = costoARS > 0 ? Math.round(((pMay - costoARS) / costoARS) * 100) : 0;
 
                   return (
                     <tr key={p.id_producto}>
@@ -895,7 +988,6 @@ export default function Productos() {
                         <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>{p.marca} {p.modelo}</span>
                       </td>
 
-                      {/* Costo Real dual: USD / ARS */}
                       <td className="td-muted" style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                         <div>USD ${costoUSD.toFixed(2)}</div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--color-accent)' }}>
@@ -903,7 +995,6 @@ export default function Productos() {
                         </div>
                       </td>
 
-                      {/* Minorista en ARS + Rentabilidad real */}
                       <td>
                         <span className="td-precio">{formatPrice(pMin)}</span>
                         <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: rentMin >= 0 ? '#5EDBA2' : '#F87171' }}>
@@ -911,15 +1002,53 @@ export default function Productos() {
                         </span>
                       </td>
 
-                      {/* Mayorista en ARS + Rentabilidad real */}
-                      <td>
-                        <span className="td-muted">{pMay > 0 ? formatPrice(pMay) : '—'}</span>
-                        {pMay > 0 && (
-                          <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: rentMay >= 0 ? '#6EA8FE' : '#F87171' }}>
-                            {rentMay >= 0 ? `+${rentMay}%` : `${rentMay}%`}
-                          </span>
-                        )}
-                      </td>
+                      {/* Mayoristas (M1 / M2 / M3) con Rentabilidad al lado */}
+<td style={{ fontSize: '0.78rem', fontVariantNumeric: 'tabular-nums' }}>
+  {/* Nivel 1 */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+    <strong style={{ minWidth: '22px' }}>M1:</strong>
+    <span>{pM1 > 0 ? formatPrice(pM1) : '—'}</span>
+    {pM1 > 0 && costoARS > 0 && (
+      <span style={{ 
+        fontSize: '0.7rem', 
+        fontWeight: 600, 
+        color: ((pM1 - costoARS) / costoARS) >= 0 ? '#6EA8FE' : '#F87171' 
+      }}>
+        +{Math.round(((pM1 - costoARS) / costoARS) * 100)}%
+      </span>
+    )}
+  </div>
+
+  {/* Nivel 2 */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+    <strong style={{ minWidth: '22px' }}>M2:</strong>
+    <span>{pM2 > 0 ? formatPrice(pM2) : '—'}</span>
+    {pM2 > 0 && costoARS > 0 && (
+      <span style={{ 
+        fontSize: '0.7rem', 
+        fontWeight: 600, 
+        color: ((pM2 - costoARS) / costoARS) >= 0 ? '#6EA8FE' : '#F87171' 
+      }}>
+        +{Math.round(((pM2 - costoARS) / costoARS) * 100)}%
+      </span>
+    )}
+  </div>
+
+  {/* Nivel 3 */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+    <strong style={{ minWidth: '22px' }}>M3:</strong>
+    <span>{pM3 > 0 ? formatPrice(pM3) : '—'}</span>
+    {pM3 > 0 && costoARS > 0 && (
+      <span style={{ 
+        fontSize: '0.7rem', 
+        fontWeight: 600, 
+        color: ((pM3 - costoARS) / costoARS) >= 0 ? '#6EA8FE' : '#F87171' 
+      }}>
+        +{Math.round(((pM3 - costoARS) / costoARS) * 100)}%
+      </span>
+    )}
+  </div>
+</td>
 
                       <td style={{ fontWeight: '700', color: p.stock_actual <= p.stock_minimo ? '#FBBF24' : 'var(--color-text-heading)' }}>
                         {p.stock_actual} u.
@@ -993,6 +1122,72 @@ export default function Productos() {
         )}
       </div>
 
+      {/* ── Modal de Gestión y Modificación de Categorías ── */}
+      {showCategoryModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(3, 8, 15, 0.85)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '1rem' }}>
+          <div className="form-card" style={{ width: '100%', maxWidth: '500px', border: '1px solid rgba(201, 162, 39, 0.4)', boxShadow: 'var(--shadow-md)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.75rem' }}>
+              <h3 className="form-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Settings size={16} style={{ color: 'var(--color-accent)' }} /> Administrar Categorías
+              </h3>
+              <button onClick={() => setShowCategoryModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {categorias.map(cat => (
+                <div key={cat.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}>
+                  {editingCategory === cat.id ? (
+                    <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                      <input 
+                        type="text" 
+                        value={editCategoryName} 
+                        onChange={(e) => setEditCategoryName(e.target.value)} 
+                        autoFocus
+                        style={{ flex: 1, height: '32px', fontSize: '0.85rem' }} 
+                      />
+                      <button type="button" onClick={() => handleUpdateCategory(cat.id)} style={{ background: 'var(--color-success-soft)', border: 'none', color: '#5EDBA2', padding: '0 8px', borderRadius: '4px', cursor: 'pointer' }}>
+                        <Check size={15} />
+                      </button>
+                      <button type="button" onClick={() => setEditingCategory(null)} style={{ background: 'var(--color-error-soft)', border: 'none', color: '#F87171', padding: '0 8px', borderRadius: '4px', cursor: 'pointer' }}>
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text-heading)' }}>{cat.nombre}</span>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button 
+                          type="button" 
+                          onClick={() => { setEditingCategory(cat.id); setEditCategoryName(cat.nombre); }} 
+                          style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', padding: '4px' }}
+                          title="Modificar nombre"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => handleDeleteCategory(cat.id)} 
+                          style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '4px' }}
+                          title="Eliminar categoría"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
+              <button type="button" className="btn-primary" onClick={() => setShowCategoryModal(false)} style={{ padding: '8px 16px' }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Modal Ficha Técnica y Edición Completa ── */}
       {editingProduct && editFormData && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(3, 8, 15, 0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)', padding: '1rem' }}>
@@ -1021,8 +1216,10 @@ export default function Productos() {
                   <input type="text" name="nombre" value={editFormData.nombre} onChange={handleEditChange} required />
                 </div>
                 <div className="form-group">
-                  <label>Código de Barras</label>
-                  <input type="text" name="codigo_barras" value={editFormData.codigo_barras || ''} onChange={handleEditChange} />
+                  <label>Categoría</label>
+                  <select name="categoria_id" value={editFormData.categoria_id} onChange={handleEditChange} required>
+                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
                 </div>
               </div>
 
@@ -1059,22 +1256,27 @@ export default function Productos() {
                 </div>
               </div>
 
-              <div className="form-row" style={{ gridTemplateColumns: '1.5fr 1.5fr 1fr' }}>
+              {/* 3 Precios Mayoristas en Edición */}
+              <div className="form-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                 <div className="form-group">
-                  <label>Precio Venta Minorista (ARS)</label>
+                  <label>P. Minorista (ARS)</label>
                   <input type="number" step="0.01" name="precio_venta" value={editFormData.precio_venta} onChange={handleEditChange} required />
                 </div>
                 <div className="form-group">
-                  <label>Precio Mayorista (ARS)</label>
-                  <input type="number" step="0.01" name="precio_mayorista" value={editFormData.precio_mayorista} onChange={handleEditChange} />
+                  <label>Mayorista 1 (Base)</label>
+                  <input type="number" step="0.01" name="precio_mayorista_1" value={editFormData.precio_mayorista_1} onChange={handleEditChange} />
                 </div>
                 <div className="form-group">
-                  <label>Stock Mínimo</label>
-                  <input type="number" name="stock_minimo" value={editFormData.stock_minimo} onChange={handleEditChange} required />
+                  <label>Mayorista 2 (Volumen)</label>
+                  <input type="number" step="0.01" name="precio_mayorista_2" value={editFormData.precio_mayorista_2} onChange={handleEditChange} />
+                </div>
+                <div className="form-group">
+                  <label>Mayorista 3 (Distrib.)</label>
+                  <input type="number" step="0.01" name="precio_mayorista_3" value={editFormData.precio_mayorista_3} onChange={handleEditChange} />
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginTop: '0.5rem' }}>
+              <div className="form-group" style={{ marginTop: '0.75rem' }}>
                 <label>Foto del Artículo (WebP)</label>
                 <input type="file" accept="image/*" disabled={subiendoFoto} onChange={(e) => handleSubirFoto(e, true)} />
                 {editFormData.fotos && editFormData.fotos.length > 0 && (
@@ -1106,7 +1308,7 @@ export default function Productos() {
         </div>
       )}
 
-      {/* ── Modal Lightbox para Zoom de Foto ── */}
+      {/* ── Modal Lightbox Zoom de Foto ── */}
       {fotoZoom && (
         <div 
           onClick={() => setFotoZoom(null)}
@@ -1129,4 +1331,4 @@ export default function Productos() {
       )}
     </div>
   );
-}
+}4
