@@ -343,4 +343,49 @@
     background: white !important;
     color: black !important;
   }
+}/* ── Desglose de Fondos por Medio de Cobro Responsivo ── */
+.medios-pago-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.medio-pago-card {
+  padding: 1.1rem 1.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.9rem !important;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+}
+
+.medio-pago-card:hover {
+  border-color: rgba(201, 162, 39, 0.3);
+}
+
+.medio-pago-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.medio-pago-val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-heading);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+@media (max-width: 768px) {
+  .medios-pago-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
 }
