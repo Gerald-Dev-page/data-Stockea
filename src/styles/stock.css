@@ -130,12 +130,116 @@
   color: var(--color-accent);
 }
 
+/* Reemplazá el final de src/styles/stock.css con esto: */
 @media (max-width: 600px) {
-  .stock-stats { grid-template-columns: 1fr; }
-  .data-table th:nth-child(3),
-  .data-table td:nth-child(3),
-  .data-table th:nth-child(5),
-  .data-table td:nth-child(5) {
+  .stock-stats { 
+    grid-template-columns: 1fr; 
+  }
+  
+  /* Solo ocultar en la tabla de stock si tiene la clase específica */
+  .stock-table th:nth-child(3),
+  .stock-table td:nth-child(3),
+  .stock-table th:nth-child(5),
+  .stock-table td:nth-child(5) {
     display: none;
+  }
+}
+/* ── Toolbar y Filtros Responsivos de Stock ── */
+.stock-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+.stock-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.stock-search-input {
+  background: var(--color-bg-main) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 8px 12px 8px 34px !important;
+  color: var(--color-text-heading) !important;
+  font-size: 0.85rem !important;
+  width: 250px;
+  height: 40px !important;
+  outline: none !important;
+  transition: var(--transition);
+}
+
+.stock-search-input:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.2) !important;
+}
+
+.stock-filter-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stock-filter-btn {
+  background: var(--color-bg-main);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.stock-filter-btn.active-todos {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.stock-filter-btn.active-bajo {
+  background: var(--color-warning-soft);
+  border-color: #FBBF24;
+  color: #FBBF24;
+}
+
+.stock-filter-btn.active-transito {
+  background: rgba(42, 90, 150, 0.18);
+  border-color: #6EA8FE;
+  color: #6EA8FE;
+}
+
+@media (max-width: 768px) {
+  .stock-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .stock-search-box,
+  .stock-search-input {
+    width: 100% !important;
+  }
+
+  .stock-filter-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+    width: 100%;
+  }
+
+  .stock-filter-btn {
+    padding: 8px 4px !important;
+    font-size: 0.74rem !important;
+    width: 100%;
   }
 }
