@@ -1,5 +1,5 @@
 // src/hooks/useVentas.js
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 
 export const ITEMS_PER_PAGE = 10;
@@ -14,6 +14,7 @@ export function useVentas() {
   const [showToast, setShowToast] = useState(false);
   const [userId, setUserId] = useState(null);
 
+  // Estados originales del POS
   const [clienteId, setClienteId] = useState('');
   const [carrito, setCarrito] = useState([]);
   const [metodoPago, setMetodoPago] = useState('efectivo');
@@ -23,7 +24,6 @@ export function useVentas() {
     d.setDate(d.getDate() + 15);
     return d.toISOString().split('T')[0];
   });
-  const [paginaActual, setPaginaActual] = useState(1);
 
   const [itemActual, setItemActual] = useState({
     id_producto: '',
@@ -32,58 +32,78 @@ export function useVentas() {
     precio_unitario: 0
   });
 
+  // Filtros del historial
+  const [busquedaHistorial, setBusquedaHistorial] = useState('');
+  const [filtroCliente, setFiltroCliente] = useState('todos');
+  const [filtroEstadoPago, setFiltroEstadoPago] = useState('todos');
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState('');
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState('');
+  const [itemsPorPagina, setItemsPorPagina] = useState(10);
+  const [paginaActual, setPaginaActual] = useState(1);
+
+  const fetchInitialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [resClientes, resProd, resHistorial] = await Promise.all([
+        supabase
+          .from('clientes')
+          .select('id_cliente, nombre_razon_social, saldo_deudor')
+          .order('nombre_razon_social', { ascending: true }),
+
+        supabase
+          .from('productos')
+          .select('id_producto, sku, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, activo, categorias(nombre)')
+          .eq('activo', true)
+          .order('nombre', { ascending: true }),
+
+        supabase
+          .from('ventas')
+          .select(`
+            id_venta,
+            creado_en,
+            total,
+            metodo_pago,
+            estado_pago,
+            fecha_vencimiento,
+            cliente_id,
+            clientes ( nombre_razon_social ),
+            perfiles ( nombre_completo ),
+            ventas_detalle (
+              cantidad,
+              productos ( nombre )
+            )
+          `)
+          .order('creado_en', { ascending: false })
+          .limit(200)
+      ]);
+
+      if (resClientes.error) throw resClientes.error;
+      if (resProd.error) throw resProd.error;
+      if (resHistorial.error) throw resHistorial.error;
+
+      setClientes(resClientes.data || []);
+      setCatalogo(resProd.data || []);
+      setHistorial(resHistorial.data || []);
+    } catch (err) {
+      console.error(err);
+      setError("Error al sincronizar datos.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) setUserId(user.id);
     });
     fetchInitialData();
-  }, []);
+  }, [fetchInitialData]);
 
-  const fetchInitialData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [resClientes, resProd] = await Promise.all([
-        supabase.from('clientes').select('id_cliente, nombre_razon_social, saldo_deudor').order('nombre_razon_social', { ascending: true }),
-        supabase.from('productos').select('id_producto, sku, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, activo, categorias(nombre)').eq('activo', true).order('nombre', { ascending: true })
-      ]);
-
-      if (resClientes.error) throw resClientes.error;
-      if (resProd.error) throw resProd.error;
-
-      setClientes(resClientes.data || []);
-      setCatalogo(resProd.data || []);
-      await fetchHistorialDia();
-    } catch (err) {
-      setError("Error de conexión al sincronizar catálogos.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchHistorialDia = async () => {
-    try {
-      const inicioDia = new Date();
-      inicioDia.setHours(0, 0, 0, 0);
-
-      const { data, error: errHistorial } = await supabase
-        .from('ventas')
-        .select(`
-          id_venta, creado_en, total, metodo_pago, estado_pago, fecha_vencimiento,
-          clientes ( nombre_razon_social ),
-          perfiles ( nombre_completo ),
-          ventas_detalle ( cantidad, precio_historico, productos ( nombre ) )
-        `)
-        .gte('creado_en', inicioDia.toISOString())
-        .order('creado_en', { ascending: false });
-
-      if (errHistorial) throw errHistorial;
-      setHistorial(data || []);
-    } catch (err) {
-      console.error(err.message);
-    }
-  };
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busquedaHistorial, filtroCliente, filtroEstadoPago, filtroFechaDesde, filtroFechaHasta, itemsPorPagina]);
 
   const resolverPrecio = (prod, tipo) => {
     if (!prod) return 0;
@@ -155,13 +175,20 @@ export function useVentas() {
     setCarrito(carrito.filter(i => String(i.id_producto) !== String(id_producto)));
   };
 
+  // Función original de selección de medio de cobro
   const handleSeleccionarMetodoPago = (metodo) => {
     setMetodoPago(metodo);
-    if (metodo === 'cuenta_corriente') setEsPendiente(true);
+    if (metodo === 'cuenta_corriente') {
+      setEsPendiente(true);
+    }
   };
 
+  // Asignar Consumidor Final de forma robusta
   const handleAsignarConsumidorFinal = () => {
-    const cf = clientes.find(c => c.nombre_razon_social.toLowerCase().includes('consumidor final'));
+    const cf = clientes.find(c => 
+      c.nombre_razon_social?.toLowerCase().includes('consumidor') || 
+      c.nombre_razon_social?.toLowerCase().includes('final')
+    );
     if (cf) {
       setClienteId(cf.id_cliente);
     } else if (clientes.length > 0) {
@@ -193,7 +220,7 @@ export function useVentas() {
       const esConsumidorFinal = clienteSeleccionado?.nombre_razon_social?.toLowerCase().includes('consumidor final');
 
       if (esPendiente && esConsumidorFinal) {
-        throw new Error("No se puede emitir una venta pendiente de pago a Consumidor Final. Seleccione o registre un cliente con nombre/razón social.");
+        throw new Error("No se puede emitir una venta pendiente de pago a Consumidor Final.");
       }
 
       const { data: ventaReq, error: errVenta } = await supabase
@@ -243,7 +270,6 @@ export function useVentas() {
       setClienteId('');
       setMetodoPago('efectivo');
       setEsPendiente(false);
-      setPaginaActual(1);
 
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
@@ -255,17 +281,147 @@ export function useVentas() {
     }
   };
 
-  const totalDia = historial.reduce((acc, v) => acc + Number(v.total || 0), 0);
-  const totalPaginas = Math.ceil(historial.length / ITEMS_PER_PAGE) || 1;
+  const cancelarVenta = async (id_venta) => {
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { data: ventaTarget, error: errVenta } = await supabase
+        .from('ventas')
+        .select(`
+          id_venta, cliente_id, total, estado_pago,
+          ventas_detalle ( producto_id, cantidad )
+        `)
+        .eq('id_venta', id_venta)
+        .single();
+
+      if (errVenta) throw errVenta;
+
+      if (ventaTarget.estado_pago === 'cancelado') {
+        throw new Error("Esta operación ya fue anulada previamente.");
+      }
+
+      for (const item of (ventaTarget.ventas_detalle || [])) {
+        const { data: prodActual } = await supabase
+          .from('productos')
+          .select('stock_actual')
+          .eq('id_producto', item.producto_id)
+          .single();
+
+        const stockRestituido = (prodActual?.stock_actual || 0) + item.cantidad;
+
+        await supabase
+          .from('productos')
+          .update({ stock_actual: stockRestituido })
+          .eq('id_producto', item.producto_id);
+
+        await supabase
+          .from('movimientos_stock')
+          .insert([{
+            producto_id: item.producto_id,
+            usuario_id: userId,
+            tipo: 'ajuste',
+            cantidad: item.cantidad
+          }]);
+      }
+
+      if (ventaTarget.estado_pago === 'pendiente' && ventaTarget.cliente_id) {
+        const { data: cli } = await supabase
+          .from('clientes')
+          .select('saldo_deudor')
+          .eq('id_cliente', ventaTarget.cliente_id)
+          .single();
+
+        if (cli) {
+          const nuevoSaldo = Math.max(0, Number(cli.saldo_deudor || 0) - Number(ventaTarget.total || 0));
+          await supabase
+            .from('clientes')
+            .update({ saldo_deudor: nuevoSaldo })
+            .eq('id_cliente', ventaTarget.cliente_id);
+        }
+      }
+
+      const { error: updVentaErr } = await supabase
+        .from('ventas')
+        .update({ estado_pago: 'cancelado' })
+        .eq('id_venta', id_venta);
+
+      if (updVentaErr) throw updVentaErr;
+
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3500);
+      fetchInitialData();
+      return true;
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Error al anular la venta.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Filtrado de historial
+  const historialFiltrado = useMemo(() => {
+    return historial.filter(v => {
+      const q = busquedaHistorial.toLowerCase().trim();
+      if (q) {
+        const clienteNom = (v.clientes?.nombre_razon_social || '').toLowerCase();
+        const operadorNom = (v.perfiles?.nombre_completo || '').toLowerCase();
+        const tieneArticulo = (v.ventas_detalle || []).some(d =>
+          (d.productos?.nombre || '').toLowerCase().includes(q)
+        );
+        const matchId = String(v.id_venta).toLowerCase().includes(q);
+
+        if (!clienteNom.includes(q) && !operadorNom.includes(q) && !tieneArticulo && !matchId) {
+          return false;
+        }
+      }
+
+      if (filtroCliente !== 'todos' && String(v.cliente_id) !== String(filtroCliente)) {
+        return false;
+      }
+
+      if (filtroEstadoPago !== 'todos' && v.estado_pago !== filtroEstadoPago) {
+        return false;
+      }
+
+      const fechaLocal = new Date(v.creado_en);
+      const strFecha = `${fechaLocal.getFullYear()}-${String(fechaLocal.getMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getDate()).padStart(2, '0')}`;
+
+      if (filtroFechaDesde && strFecha < filtroFechaDesde) return false;
+      if (filtroFechaHasta && strFecha > filtroFechaHasta) return false;
+
+      return true;
+    });
+  }, [historial, busquedaHistorial, filtroCliente, filtroEstadoPago, filtroFechaDesde, filtroFechaHasta]);
+
+  const totalPaginas = Math.ceil(historialFiltrado.length / itemsPorPagina) || 1;
   const historialPaginado = useMemo(() => {
-    const inicio = (paginaActual - 1) * ITEMS_PER_PAGE;
-    return historial.slice(inicio, inicio + ITEMS_PER_PAGE);
-  }, [historial, paginaActual]);
+    const inicio = (paginaActual - 1) * itemsPorPagina;
+    return historialFiltrado.slice(inicio, inicio + itemsPorPagina);
+  }, [historialFiltrado, paginaActual, itemsPorPagina]);
+
+  const limpiarFiltros = () => {
+    setBusquedaHistorial('');
+    setFiltroCliente('todos');
+    setFiltroEstadoPago('todos');
+    setFiltroFechaDesde('');
+    setFiltroFechaHasta('');
+    setPaginaActual(1);
+  };
+
+  const hoyStr = new Date().toISOString().split('T')[0];
+  const totalDia = historial
+    .filter(v => v.creado_en?.startsWith(hoyStr) && v.estado_pago !== 'cancelado')
+    .reduce((acc, v) => acc + Number(v.total || 0), 0);
 
   return {
     clientes,
     catalogo,
     historial,
+    historialFiltrado,
+    historialPaginado,
     loading,
     saving,
     error,
@@ -284,7 +440,19 @@ export function useVentas() {
     paginaActual,
     setPaginaActual,
     totalPaginas,
-    historialPaginado,
+    itemsPorPagina,
+    setItemsPorPagina,
+    busquedaHistorial,
+    setBusquedaHistorial,
+    filtroCliente,
+    setFiltroCliente,
+    filtroEstadoPago,
+    setFiltroEstadoPago,
+    filtroFechaDesde,
+    setFiltroFechaDesde,
+    filtroFechaHasta,
+    setFiltroFechaHasta,
+    limpiarFiltros,
     totalDia,
     totalFactura,
     handleProductoChange,
@@ -293,6 +461,7 @@ export function useVentas() {
     handleEliminarItemCarrito,
     handleSeleccionarMetodoPago,
     handleAsignarConsumidorFinal,
-    handleConfirmarVenta
+    handleConfirmarVenta,
+    cancelarVenta
   };
 }

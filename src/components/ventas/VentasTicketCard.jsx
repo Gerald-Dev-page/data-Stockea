@@ -53,8 +53,8 @@ export default function VentasTicketCard({
                     {formatPrice(item.total)}
                   </span>
                   <button 
-                    type="button"
-                    onClick={() => onEliminarItem(item.id_producto)}
+                    type="button" 
+                    onClick={() => onEliminarItem(item.id_producto)} 
                     style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 0 }}
                     title="Quitar"
                   >

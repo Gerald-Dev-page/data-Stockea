@@ -1,62 +1,54 @@
 // src/components/ventas/VentasClienteCard.jsx
-import { User, AlertTriangle } from 'lucide-react';
-
-const formatPrice = (n) =>
-  Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+import { User, UserPlus } from 'lucide-react';
 
 export default function VentasClienteCard({
   clientes,
   clienteId,
   setClienteId,
-  onConsumidorFinal,
-  saving
+  onAsignarConsumidorFinal
 }) {
-  const clienteActivo = clientes.find(c => String(c.id_cliente) === String(clienteId));
-
   return (
-    <div className="form-card" style={{ marginBottom: '1.25rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-        <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: '600', color: 'var(--color-text-heading)' }}>
-          <User size={15} style={{ color: 'var(--color-accent)' }} /> Cliente
-        </label>
+    <div className="form-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+        <h3 className="form-title" style={{ margin: 0 }}>
+          <User size={16} style={{ color: 'var(--color-accent)' }} /> Titular de la Operación
+        </h3>
         <button
           type="button"
-          onClick={onConsumidorFinal}
+          onClick={onAsignarConsumidorFinal}
           style={{
             background: 'var(--color-accent-soft)',
-            border: '1px solid rgba(201, 162, 39, 0.3)',
+            border: '1px solid rgba(201, 162, 39, 0.4)',
             color: 'var(--color-accent)',
+            fontSize: '0.74rem',
+            fontWeight: 600,
+            padding: '4px 10px',
             borderRadius: 'var(--radius-sm)',
-            padding: '3px 8px',
-            fontSize: '0.72rem',
-            fontWeight: '600',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
           }}
         >
-          + Consumidor Final
+          <UserPlus size={13} /> + Consumidor Final
         </button>
       </div>
 
-      <div className="form-group" style={{ marginBottom: 0 }}>
-        <select 
-          value={clienteId} 
-          onChange={(e) => setClienteId(e.target.value)} 
-          disabled={saving}
+      <div className="form-group" style={{ margin: 0 }}>
+        <select
+          value={clienteId}
+          onChange={(e) => setClienteId(e.target.value)}
+          required
+          style={{ width: '100%', height: '42px' }}
         >
-          <option value="">— Seleccione un cliente —</option>
+          <option value="">Seleccione un cliente registrado...</option>
           {clientes.map(c => (
             <option key={c.id_cliente} value={c.id_cliente}>
-              {c.nombre_razon_social} {Number(c.saldo_deudor || 0) > 0 ? `(Deuda: ${formatPrice(c.saldo_deudor)})` : ''}
+              {c.nombre_razon_social} {Number(c.saldo_deudor || 0) > 0 ? `(Deuda: $${Number(c.saldo_deudor).toLocaleString('es-AR')})` : ''}
             </option>
           ))}
         </select>
       </div>
-
-      {clienteActivo && Number(clienteActivo.saldo_deudor || 0) > 0 && (
-        <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#F87171', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <AlertTriangle size={13} /> Saldo deudor acumulado: <strong>{formatPrice(clienteActivo.saldo_deudor)}</strong>
-        </div>
-      )}
     </div>
   );
 }

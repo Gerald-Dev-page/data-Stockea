@@ -1,5 +1,5 @@
 // src/hooks/useProducts.js
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { comprimirAWebP } from '../utils/imageCompressor';
 
@@ -75,13 +75,13 @@ export function useProducts() {
     }
   };
 
-  const fetchInitialData = async () => {
+  const fetchInitialData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const [catRes, prodRes] = await Promise.all([
         supabase.from('categorias').select('*').order('nombre', { ascending: true }),
-        supabase.from('productos').select('*, categorias(nombre)').order('nombre', { ascending: true })
+        supabase.from('productos').select('*, categorias(nombre)').eq('activo', true).order('nombre', { ascending: true })
       ]);
       if (catRes.error) throw catRes.error;
       if (prodRes.error) throw prodRes.error;
@@ -92,7 +92,7 @@ export function useProducts() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const uploadFoto = async (file, sku) => {
     try {
@@ -114,6 +114,51 @@ export function useProducts() {
       return null;
     } finally {
       setSubiendoFoto(false);
+    }
+  };
+
+  // Eliminación de producto con validación de historial
+  const deleteProduct = async (id_producto) => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      // Verificamos si tiene ventas
+      const { count, error: countErr } = await supabase
+        .from('ventas_detalle')
+        .select('*', { count: 'exact', head: true })
+        .eq('producto_id', id_producto);
+
+      if (countErr) throw countErr;
+
+      if (count > 0) {
+        // Si tiene ventas registradas, hacemos baja lógica (activo: false) para no romper FK
+        const { error: updErr } = await supabase
+          .from('productos')
+          .update({ activo: false })
+          .eq('id_producto', id_producto);
+
+        if (updErr) throw updErr;
+        notify("Producto archivado y dado de baja del catálogo activo (posee historial contable).");
+      } else {
+        // Si no tiene ventas, se puede eliminar de forma física
+        const { error: delErr } = await supabase
+          .from('productos')
+          .delete()
+          .eq('id_producto', id_producto);
+
+        if (delErr) throw delErr;
+        notify("Producto eliminado completamente del catálogo.");
+      }
+
+      fetchInitialData();
+      return true;
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo eliminar el artículo: " + err.message);
+      return false;
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -171,6 +216,7 @@ export function useProducts() {
     productosFiltrados,
     productosPaginados,
     uploadFoto,
+    deleteProduct,
     calcularCostoUSD,
     fetchInitialData
   };

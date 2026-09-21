@@ -1,5 +1,6 @@
 // src/pages/Ventas.jsx
-import { TrendingUp, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { ShoppingCart, AlertCircle, CheckCircle } from 'lucide-react';
 import '../styles/ventas.css';
 
 import { useVentas } from '../hooks/useVentas';
@@ -7,15 +8,15 @@ import VentasClienteCard from '../components/ventas/VentasClienteCard';
 import VentasProductoCard from '../components/ventas/VentasProductoCard';
 import VentasTicketCard from '../components/ventas/VentasTicketCard';
 import VentasHistorialTable from '../components/ventas/VentasHistorialTable';
-
-const formatPrice = (n) =>
-  Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+import ModalConfirmarAnulacion from '../components/ventas/ModalConfirmarAnulacion';
 
 export default function Ventas() {
   const {
     clientes,
     catalogo,
     historial,
+    historialFiltrado,
+    historialPaginado,
     loading,
     saving,
     error,
@@ -34,7 +35,19 @@ export default function Ventas() {
     paginaActual,
     setPaginaActual,
     totalPaginas,
-    historialPaginado,
+    itemsPorPagina,
+    setItemsPorPagina,
+    busquedaHistorial,
+    setBusquedaHistorial,
+    filtroCliente,
+    setFiltroCliente,
+    filtroEstadoPago,
+    setFiltroEstadoPago,
+    filtroFechaDesde,
+    setFiltroFechaDesde,
+    filtroFechaHasta,
+    setFiltroFechaHasta,
+    limpiarFiltros,
     totalDia,
     totalFactura,
     handleProductoChange,
@@ -43,25 +56,36 @@ export default function Ventas() {
     handleEliminarItemCarrito,
     handleSeleccionarMetodoPago,
     handleAsignarConsumidorFinal,
-    handleConfirmarVenta
+    handleConfirmarVenta,
+    cancelarVenta
   } = useVentas();
+
+  const [ventaParaAnular, setVentaParaAnular] = useState(null);
+
+  const handleConfirmarAnulacionModal = async (id_venta) => {
+    const ok = await cancelarVenta(id_venta);
+    if (ok) {
+      setVentaParaAnular(null);
+    }
+  };
 
   return (
     <div className="page-container dashboard-page">
       <header className="page-header">
         <div>
-          <h2>Punto de Venta</h2>
-          <p>Facturación con escalas mayoristas, medios de cobro y registro de cuentas corrientes.</p>
+          <h2>Punto de Venta y Facturación</h2>
+          <p>Emisión de comprobantes, control de crédito y caja diaria.</p>
         </div>
         <div className="header-badge">
-          <TrendingUp size={14} />
-          {formatPrice(totalDia)} facturado hoy
+          <ShoppingCart size={14} />
+          Facturado Hoy: ${Number(totalDia || 0).toLocaleString('es-AR')}
         </div>
       </header>
 
       {showToast && (
         <div className="demo-toast">
-          ✓ Venta registrada con éxito en el sistema.
+          <CheckCircle size={15} style={{ display: 'inline', marginRight: '6px' }} />
+          Operación procesada exitosamente.
         </div>
       )}
 
@@ -73,52 +97,79 @@ export default function Ventas() {
         </div>
       )}
 
-      <div className="ventas-layout-grid">
-        {/* Panel Izquierdo */}
-        <div>
+      {/* ── Layout en 2 Columnas de tu CSS original (.ventas-layout-grid) ── */}
+      <div className="ventas-layout-grid" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <VentasClienteCard
             clientes={clientes}
             clienteId={clienteId}
             setClienteId={setClienteId}
-            onConsumidorFinal={handleAsignarConsumidorFinal}
-            saving={saving}
+            onAsignarConsumidorFinal={handleAsignarConsumidorFinal}
           />
+
           <VentasProductoCard
             catalogo={catalogo}
             itemActual={itemActual}
-            setItemActual={setItemActual}
             onProductoChange={handleProductoChange}
             onTipoPrecioChange={handleTipoPrecioChange}
+            setItemActual={setItemActual}
             onAgregar={handleAgregarAlCarrito}
-            saving={saving}
           />
         </div>
 
-        {/* Panel Derecho */}
-        <VentasTicketCard
-          carrito={carrito}
-          totalFactura={totalFactura}
-          metodoPago={metodoPago}
-          onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
-          esPendiente={esPendiente}
-          setEsPendiente={setEsPendiente}
-          fechaVencimiento={fechaVencimiento}
-          setFechaVencimiento={setFechaVencimiento}
-          onEliminarItem={handleEliminarItemCarrito}
-          onConfirmar={handleConfirmarVenta}
-          disabledSubmit={saving || !clienteId || carrito.length === 0}
-          saving={saving}
-        />
+        <div>
+          <VentasTicketCard
+            carrito={carrito}
+            totalFactura={totalFactura}
+            metodoPago={metodoPago}
+            onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
+            esPendiente={esPendiente}
+            setEsPendiente={setEsPendiente}
+            fechaVencimiento={fechaVencimiento}
+            setFechaVencimiento={setFechaVencimiento}
+            onEliminarItem={handleEliminarItemCarrito}
+            onConfirmar={handleConfirmarVenta}
+            disabledSubmit={saving || carrito.length === 0}
+            saving={saving}
+          />
+        </div>
       </div>
 
-      {/* Historial */}
+      {/* Historial con filtros */}
       <VentasHistorialTable
-        historial={historial}
+        historialFiltrado={historialFiltrado}
         historialPaginado={historialPaginado}
+        clientes={clientes}
         loading={loading}
         paginaActual={paginaActual}
         setPaginaActual={setPaginaActual}
         totalPaginas={totalPaginas}
+        itemsPorPagina={itemsPorPagina}
+        setItemsPorPagina={setItemsPorPagina}
+        busqueda={busquedaHistorial}
+        setBusqueda={setBusquedaHistorial}
+        filtroCliente={filtroCliente}
+        setFiltroCliente={setFiltroCliente}
+        filtroEstado={filtroEstadoPago}
+        setFiltroEstado={setFiltroEstadoPago}
+        fechaDesde={filtroFechaDesde}
+        setFechaDesde={setFiltroFechaDesde}
+        fechaHasta={filtroFechaHasta}
+        setFechaHasta={setFiltroFechaHasta}
+        onLimpiarFiltros={limpiarFiltros}
+        onCancelarVenta={(id_venta) => {
+          const v = historial.find(item => item.id_venta === id_venta);
+          if (v) setVentaParaAnular(v);
+        }}
+        saving={saving}
+      />
+
+      {/* Modal de Anulación corporativo */}
+      <ModalConfirmarAnulacion
+        venta={ventaParaAnular}
+        onClose={() => setVentaParaAnular(null)}
+        onConfirm={handleConfirmarAnulacionModal}
+        saving={saving}
       />
     </div>
   );
