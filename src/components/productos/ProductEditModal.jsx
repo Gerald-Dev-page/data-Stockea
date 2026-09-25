@@ -1,6 +1,6 @@
 // src/components/productos/ProductEditModal.jsx
 import { useState, useEffect } from 'react';
-import { X, Wand2, Truck, Trash2, AlertTriangle, ImagePlus } from 'lucide-react';
+import { X, Wand2, Truck, ImagePlus, PauseCircle, PlayCircle } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 
 const formatPrice = (n) =>
@@ -22,7 +22,6 @@ export default function ProductEditModal({
 }) {
   const [formData, setFormData] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (product) {
@@ -39,7 +38,6 @@ export default function ProductEditModal({
         precio_mayorista_3: product.precio_mayorista_3 || '',
         fotos: product.fotos || []
       });
-      setShowConfirmDelete(false);
     }
   }, [product]);
 
@@ -128,9 +126,12 @@ export default function ProductEditModal({
     }
   };
 
-  const ejecutarEliminacion = async () => {
-    const ok = await onDeleteProduct(product.id_producto);
-    if (ok) onClose();
+  const handleTogglePausa = async () => {
+    const nuevoEstado = !formData.activo;
+    setFormData(prev => ({ ...prev, activo: nuevoEstado }));
+    if (onDeleteProduct) {
+      await onDeleteProduct(product.id_producto);
+    }
   };
 
   const costoFinalUSD = calcularCostoUSD(formData);
@@ -274,7 +275,7 @@ export default function ProductEditModal({
             </div>
           </div>
 
-          {/* ── Gestión Completa de Fotos (Subir, Reemplazar y Eliminar) ── */}
+          {/* Gestión de Fotos */}
           <div className="form-group" style={{ marginTop: '1rem', padding: '12px', background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text-heading)' }}>
               <ImagePlus size={15} style={{ color: 'var(--color-accent)' }} /> Fotos del Producto ({formData.fotos?.length || 0})
@@ -342,49 +343,47 @@ export default function ProductEditModal({
             {subiendoFoto && <small style={{ color: 'var(--color-accent)', display: 'block', marginTop: '4px' }}>Comprimiendo WebP y subiendo a Storage...</small>}
           </div>
 
-          {/* ── Zona de Peligro: Eliminar Producto ── */}
-          <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid rgba(179, 64, 42, 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-            {!showConfirmDelete ? (
-              <button
-                type="button"
-                onClick={() => setShowConfirmDelete(true)}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid rgba(179, 64, 42, 0.4)',
-                  color: '#F87171',
-                  padding: '7px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Trash2 size={14} /> Eliminar Producto
-              </button>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--color-error-soft)', padding: '6px 12px', borderRadius: '4px', border: '1px solid rgba(179, 64, 42, 0.5)' }}>
-                <AlertTriangle size={15} color="#F87171" />
-                <span style={{ fontSize: '0.76rem', color: '#F87171', fontWeight: 600 }}>¿Confirmar eliminación?</span>
-                <button
-                  type="button"
-                  onClick={ejecutarEliminacion}
-                  disabled={saving}
-                  style={{ background: 'var(--color-error)', border: 'none', color: '#FFF', padding: '4px 10px', borderRadius: '4px', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Sí, Eliminar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmDelete(false)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', fontSize: '0.74rem', cursor: 'pointer' }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            )}
+          {/* Control de Disponibilidad: Pausar / Reactivar en Ventas */}
+          <div style={{ 
+            marginTop: '1.25rem', 
+            paddingTop: '1rem', 
+            borderTop: '1px solid var(--color-border)', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            flexWrap: 'wrap', 
+            gap: '8px' 
+          }}>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={handleTogglePausa}
+              style={{
+                background: formData.activo ? 'var(--color-warning-soft)' : 'var(--color-success-soft)',
+                border: `1px solid ${formData.activo ? 'var(--color-warning)' : 'var(--color-success)'}`,
+                color: formData.activo ? 'var(--color-warning)' : 'var(--color-success)',
+                padding: '7px 14px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'var(--transition)'
+              }}
+              title={formData.activo ? "Oculta el artículo del módulo de ventas" : "Vuelve a habilitar el artículo para ventas"}
+            >
+              {formData.activo ? (
+                <>
+                  <PauseCircle size={15} /> Pausar Producto
+                </>
+              ) : (
+                <>
+                  <PlayCircle size={15} /> Reactivar Producto
+                </>
+              )}
+            </button>
 
             {/* Guardar cambios */}
             <div style={{ display: 'flex', gap: '0.75rem', marginLeft: 'auto' }}>

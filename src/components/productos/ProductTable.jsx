@@ -18,9 +18,19 @@ export default function ProductTable({
   setCategoriaFiltro,
   categorias,
   cotizacionDolar,
+  aplicarIva = false,
+  porcentajeIva = 21,
   onOpenEdit,
   onZoomFoto
 }) {
+  // Función matemática de rentabilidad (neta si aplicarIva está activo)
+  const calcRentabilidad = (precioFinal, costoARS) => {
+    if (!costoARS || costoARS <= 0 || !precioFinal || precioFinal <= 0) return 0;
+    const factor = aplicarIva ? (1 + (Number(porcentajeIva) || 21) / 100) : 1;
+    const precioSinIva = precioFinal / factor;
+    return Math.round(((precioSinIva - costoARS) / costoARS) * 100);
+  };
+
   return (
     <div className="card table-card">
       {/* ── Toolbar Superior: Buscador y Filtro ── */}
@@ -113,7 +123,10 @@ export default function ProductTable({
                 const pM2 = Number(p.precio_mayorista_2 || 0);
                 const pM3 = Number(p.precio_mayorista_3 || 0);
 
-                const rentMin = costoARS > 0 ? Math.round(((pMin - costoARS) / costoARS) * 100) : 0;
+                const rentMin = calcRentabilidad(pMin, costoARS);
+                const rentM1 = calcRentabilidad(pM1, costoARS);
+                const rentM2 = calcRentabilidad(pM2, costoARS);
+                const rentM3 = calcRentabilidad(pM3, costoARS);
 
                 return (
                   <tr key={p.id_producto}>
@@ -159,7 +172,7 @@ export default function ProductTable({
                       </div>
                     </td>
 
-                    {/* Minorista (Original) */}
+                    {/* Minorista */}
                     <td>
                       <span className="td-precio">{formatPrice(pMin)}</span>
                       <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: rentMin >= 0 ? '#5EDBA2' : '#F87171' }}>
@@ -173,8 +186,8 @@ export default function ProductTable({
                         <strong style={{ minWidth: '22px' }}>M1:</strong>
                         <span>{pM1 > 0 ? formatPrice(pM1) : '—'}</span>
                         {pM1 > 0 && costoARS > 0 && (
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: ((pM1 - costoARS) / costoARS) >= 0 ? '#6EA8FE' : '#F87171' }}>
-                            +{Math.round(((pM1 - costoARS) / costoARS) * 100)}%
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: rentM1 >= 0 ? '#6EA8FE' : '#F87171' }}>
+                            +{rentM1}%
                           </span>
                         )}
                       </div>
@@ -183,8 +196,8 @@ export default function ProductTable({
                         <strong style={{ minWidth: '22px' }}>M2:</strong>
                         <span>{pM2 > 0 ? formatPrice(pM2) : '—'}</span>
                         {pM2 > 0 && costoARS > 0 && (
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: ((pM2 - costoARS) / costoARS) >= 0 ? '#6EA8FE' : '#F87171' }}>
-                            +{Math.round(((pM2 - costoARS) / costoARS) * 100)}%
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: rentM2 >= 0 ? '#6EA8FE' : '#F87171' }}>
+                            +{rentM2}%
                           </span>
                         )}
                       </div>
@@ -193,8 +206,8 @@ export default function ProductTable({
                         <strong style={{ minWidth: '22px' }}>M3:</strong>
                         <span>{pM3 > 0 ? formatPrice(pM3) : '—'}</span>
                         {pM3 > 0 && costoARS > 0 && (
-                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: ((pM3 - costoARS) / costoARS) >= 0 ? '#6EA8FE' : '#F87171' }}>
-                            +{Math.round(((pM3 - costoARS) / costoARS) * 100)}%
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: rentM3 >= 0 ? '#6EA8FE' : '#F87171' }}>
+                            +{rentM3}%
                           </span>
                         )}
                       </div>

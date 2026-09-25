@@ -1,5 +1,5 @@
 // src/components/ventas/VentasTicketCard.jsx
-import { ShoppingCart, Banknote, Landmark, CreditCard, Calendar, CheckCircle2, Trash2 } from 'lucide-react';
+import { ShoppingCart, Banknote, Landmark, CreditCard, Calendar, CheckCircle2, Trash2, BookmarkCheck } from 'lucide-react';
 
 const formatPrice = (n) =>
   Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -16,7 +16,9 @@ export default function VentasTicketCard({
   onEliminarItem,
   onConfirmar,
   disabledSubmit,
-  saving
+  saving,
+  reservasCliente = [],
+  onCargarReserva
 }) {
   return (
     <div className="form-card" style={{ border: '1px solid rgba(201, 162, 39, 0.3)' }}>
@@ -29,6 +31,60 @@ export default function VentasTicketCard({
         </span>
       </div>
 
+      {/* ── Aviso de Reservas Disponibles del Cliente ── */}
+      {reservasCliente.length > 0 && (
+        <div style={{ 
+          marginBottom: '1rem', 
+          background: 'var(--color-accent-soft)', 
+          border: '1px solid var(--color-accent)', 
+          borderRadius: 'var(--radius-sm)', 
+          padding: '8px 12px' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', color: 'var(--color-accent)', fontSize: '0.78rem', fontWeight: 700 }}>
+            <BookmarkCheck size={15} />
+            <span>Mercadería reservada por este cliente:</span>
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {reservasCliente.map(res => (
+              <div 
+                key={res.id_reserva} 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between', 
+                  fontSize: '0.76rem', 
+                  background: 'var(--color-bg-card)', 
+                  padding: '4px 8px', 
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <span>
+                  <strong>{res.cantidad} u.</strong> {res.productos?.nombre || 'Artículo'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onCargarReserva && onCargarReserva(res)}
+                  style={{
+                    background: 'var(--color-accent)',
+                    border: 'none',
+                    color: '#FFF',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '2px 8px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  + Cargar al ticket
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Lista del Carrito */}
       <div style={{ maxHeight: '220px', overflowY: 'auto', marginBottom: '1rem' }}>
         {carrito.length === 0 ? (
@@ -40,8 +96,13 @@ export default function VentasTicketCard({
             {carrito.map(item => (
               <div key={item.id_producto} className="cart-item-row">
                 <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--color-text-heading)' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--color-text-heading)', display: 'flex', alignItems: 'center', gap: '5px' }}>
                     {item.nombre}
+                    {item.es_reserva && (
+                      <span style={{ fontSize: '0.65rem', background: 'var(--color-accent-soft)', color: 'var(--color-accent)', border: '1px solid var(--color-accent)', padding: '1px 5px', borderRadius: '4px' }}>
+                        Reserva
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)' }}>
                     {item.cantidad} u. × {formatPrice(item.precio_unitario)} ({item.tipo_precio})

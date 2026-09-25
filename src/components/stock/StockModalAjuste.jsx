@@ -1,5 +1,5 @@
 // src/components/stock/StockModalAjuste.jsx
-import { X } from 'lucide-react';
+import { X, Calendar, UserCheck } from 'lucide-react';
 
 export default function StockModalAjuste({
   selectedProduct,
@@ -7,9 +7,12 @@ export default function StockModalAjuste({
   ajusteForm,
   setAjusteForm,
   onSubmit,
-  saving
+  saving,
+  clientes = []
 }) {
   if (!selectedProduct) return null;
+
+  const hoyMin = new Date().toISOString().split('T')[0];
 
   return (
     <div 
@@ -63,7 +66,7 @@ export default function StockModalAjuste({
                 value={ajusteForm.tipo} 
                 onChange={(e) => setAjusteForm(prev => ({ ...prev, tipo: e.target.value }))}
               >
-                <option value="ingreso">+ Sumar (Ingreso/Embarque)</option>
+                <option value="ingreso">+ Sumar (Ingreso/Asignar)</option>
                 <option value="egreso">- Restar (Salida/Baja)</option>
               </select>
             </div>
@@ -79,6 +82,45 @@ export default function StockModalAjuste({
               />
             </div>
           </div>
+
+          {/* Campo condicional: Fecha de llegada para Tránsito */}
+          {ajusteForm.destino === 'transito' && ajusteForm.tipo === 'ingreso' && (
+            <div className="form-group" style={{ marginTop: '0.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Calendar size={14} style={{ color: 'var(--color-accent)' }} />
+                Fecha Estimada de Llegada
+              </label>
+              <input 
+                type="date" 
+                min={hoyMin}
+                value={ajusteForm.fecha_estimada} 
+                onChange={(e) => setAjusteForm(prev => ({ ...prev, fecha_estimada: e.target.value }))} 
+                required 
+              />
+            </div>
+          )}
+
+          {/* Campo condicional: Cliente para Reservas Comerciales */}
+          {ajusteForm.destino === 'reservado' && ajusteForm.tipo === 'ingreso' && (
+            <div className="form-group" style={{ marginTop: '0.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <UserCheck size={14} style={{ color: 'var(--color-accent)' }} />
+                Asignar Reserva al Cliente
+              </label>
+              <select 
+                value={ajusteForm.cliente_id} 
+                onChange={(e) => setAjusteForm(prev => ({ ...prev, cliente_id: e.target.value }))}
+                required
+              >
+                <option value="">Seleccione el cliente solicitante...</option>
+                {clientes.map(c => (
+                  <option key={c.id_cliente} value={c.id_cliente}>
+    {c.nombre_razon_social || `Cliente #${c.id_cliente.slice(0, 6)}`}
+  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.25rem' }}>
             <button 

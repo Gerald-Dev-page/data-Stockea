@@ -23,17 +23,11 @@ export function useProducts() {
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
   const [paginaActual, setPaginaActual] = useState(1);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserId(user.id);
-    });
-    fetchInitialData();
-    fetchCotizacion();
-  }, []);
-
-  useEffect(() => {
-    setPaginaActual(1);
-  }, [busqueda, categoriaFiltro]);
+  // IVA siempre activo por defecto
+  const [porcentajeIva, setPorcentajeIva] = useState(21);
+  const [aplicarIva, setAplicarIva] = useState(true);
+  const [guardandoConfig, setGuardandoConfig] = useState(false);
+  const [configGuardadaOk, setConfigGuardadaOk] = useState(false);
 
   const notify = (msg) => {
     setToastMessage(msg);
@@ -44,15 +38,52 @@ export function useProducts() {
     try {
       const { data, error: err } = await supabase
         .from('configuracion')
-        .select('cotizacion_dolar')
+        .select('cotizacion_dolar, porcentaje_iva, aplicar_iva')
         .eq('id', 1)
         .single();
       if (err && err.code !== 'PGRST116') throw err;
-      if (data?.cotizacion_dolar) setCotizacionDolar(Number(data.cotizacion_dolar));
+      if (data) {
+        if (data.cotizacion_dolar) setCotizacionDolar(Number(data.cotizacion_dolar));
+        if (data.porcentaje_iva !== undefined) setPorcentajeIva(Number(data.porcentaje_iva));
+        // Siempre mantenemos aplicarIva en true por regla de negocio
+        setAplicarIva(true);
+      }
     } catch (err) {
       console.error(err.message);
     }
   };
+
+  // Trae todos los productos (activos y pausados) para administración
+  const fetchInitialData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [catRes, prodRes] = await Promise.all([
+        supabase.from('categorias').select('*').order('nombre', { ascending: true }),
+        supabase.from('productos').select('*, categorias(nombre)').order('nombre', { ascending: true })
+      ]);
+      if (catRes.error) throw catRes.error;
+      if (prodRes.error) throw prodRes.error;
+      setCategorias(catRes.data || []);
+      setProductos(prodRes.data || []);
+    } catch (err) {
+      setError('No se pudo sincronizar la información del catálogo.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+    fetchInitialData();
+    fetchCotizacion();
+  }, [fetchInitialData]);
+
+  useEffect(() => {
+    setPaginaActual(1);
+  }, [busqueda, categoriaFiltro]);
 
   const saveCotizacion = async () => {
     const valor = Number(cotizacionDolar);
@@ -74,25 +105,6 @@ export function useProducts() {
       setGuardandoDolar(false);
     }
   };
-
-  const fetchInitialData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [catRes, prodRes] = await Promise.all([
-        supabase.from('categorias').select('*').order('nombre', { ascending: true }),
-        supabase.from('productos').select('*, categorias(nombre)').eq('activo', true).order('nombre', { ascending: true })
-      ]);
-      if (catRes.error) throw catRes.error;
-      if (prodRes.error) throw prodRes.error;
-      setCategorias(catRes.data || []);
-      setProductos(prodRes.data || []);
-    } catch (err) {
-      setError('No se pudo sincronizar la información del catálogo.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const uploadFoto = async (file, sku) => {
     try {
@@ -117,45 +129,34 @@ export function useProducts() {
     }
   };
 
-  // Eliminación de producto con validación de historial
-  const deleteProduct = async (id_producto) => {
+  // Alternar pausa / reactivación (Baja Lógica limpia)
+  const togglePausarProducto = async (productoOId) => {
     try {
       setSaving(true);
       setError(null);
+      
+      const id = typeof productoOId === 'object' ? productoOId.id_producto : productoOId;
+      const target = productos.find(p => p.id_producto === id);
+      if (!target) return false;
 
-      // Verificamos si tiene ventas
-      const { count, error: countErr } = await supabase
-        .from('ventas_detalle')
-        .select('*', { count: 'exact', head: true })
-        .eq('producto_id', id_producto);
+      const nuevoEstado = !target.activo;
 
-      if (countErr) throw countErr;
+      const { error: updErr } = await supabase
+        .from('productos')
+        .update({ activo: nuevoEstado })
+        .eq('id_producto', id);
 
-      if (count > 0) {
-        // Si tiene ventas registradas, hacemos baja lógica (activo: false) para no romper FK
-        const { error: updErr } = await supabase
-          .from('productos')
-          .update({ activo: false })
-          .eq('id_producto', id_producto);
+      if (updErr) throw updErr;
 
-        if (updErr) throw updErr;
-        notify("Producto archivado y dado de baja del catálogo activo (posee historial contable).");
-      } else {
-        // Si no tiene ventas, se puede eliminar de forma física
-        const { error: delErr } = await supabase
-          .from('productos')
-          .delete()
-          .eq('id_producto', id_producto);
+      setProductos(prev => prev.map(p => 
+        p.id_producto === id ? { ...p, activo: nuevoEstado } : p
+      ));
 
-        if (delErr) throw delErr;
-        notify("Producto eliminado completamente del catálogo.");
-      }
-
-      fetchInitialData();
+      notify(nuevoEstado ? `Producto "${target.nombre}" reactivado en ventas.` : `Producto "${target.nombre}" pausado (oculto en ventas).`);
       return true;
     } catch (err) {
       console.error(err);
-      setError("No se pudo eliminar el artículo: " + err.message);
+      setError("No se pudo cambiar el estado del producto: " + err.message);
       return false;
     } finally {
       setSaving(false);
@@ -188,6 +189,27 @@ export function useProducts() {
     return productosFiltrados.slice(inicio, inicio + ITEMS_PER_PAGE);
   }, [productosFiltrados, paginaActual]);
 
+  const saveConfiguracion = async () => {
+    try {
+      setGuardandoConfig(true);
+      const { error: err } = await supabase.from('configuracion').upsert({
+        id: 1,
+        cotizacion_dolar: Number(cotizacionDolar) || 1,
+        porcentaje_iva: Number(porcentajeIva) || 0,
+        aplicar_iva: true,
+        actualizado_en: new Date().toISOString()
+      });
+      if (err) throw err;
+      setConfigGuardadaOk(true);
+      notify("Configuración de USD e IVA guardada.");
+      setTimeout(() => setConfigGuardadaOk(false), 2500);
+    } catch (err) {
+      setError('No se pudo actualizar la configuración.');
+    } finally {
+      setGuardandoConfig(false);
+    }
+  };
+
   return {
     productos,
     categorias,
@@ -216,8 +238,16 @@ export function useProducts() {
     productosFiltrados,
     productosPaginados,
     uploadFoto,
-    deleteProduct,
+    deleteProduct: togglePausarProducto,
+    togglePausarProducto,
     calcularCostoUSD,
-    fetchInitialData
+    fetchInitialData,
+    saveConfiguracion,
+    guardandoConfig,
+    configGuardadaOk,
+    aplicarIva,
+    setAplicarIva,
+    porcentajeIva,
+    setPorcentajeIva
   };
 }

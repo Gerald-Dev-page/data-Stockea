@@ -30,7 +30,11 @@ export default function Dashboard() {
     maxBar,
     ultimasVentas,
     ventasPaginadas,
-    exportarCSV
+    exportarCSV,
+    filtroEstadoOperacion,
+  setFiltroEstadoOperacion,
+  busquedaOperacion,
+  setBusquedaOperacion
   } = useDashboard();
 
   return (
@@ -74,12 +78,16 @@ export default function Dashboard() {
             metricas={metricas}
           />
           <DashboardTable
-            ultimasVentas={ultimasVentas}
-            ventasPaginadas={ventasPaginadas}
-            paginaActual={paginaActual}
-            setPaginaActual={setPaginaActual}
-            totalPaginas={totalPaginas}
-          />
+  ultimasVentas={ultimasVentas}
+  ventasPaginadas={ventasPaginadas}
+  paginaActual={paginaActual}
+  setPaginaActual={setPaginaActual}
+  totalPaginas={totalPaginas}
+  filtroEstadoOperacion={filtroEstadoOperacion}
+  setFiltroEstadoOperacion={setFiltroEstadoOperacion}
+  busquedaOperacion={busquedaOperacion}
+  setBusquedaOperacion={setBusquedaOperacion}
+/>
         </>
       )}
     </div>

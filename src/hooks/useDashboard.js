@@ -5,7 +5,6 @@ import { supabase } from '../services/supabase';
 export const ITEMS_PER_PAGE = 10;
 export const CHART_COLORS = ['#C9A227', '#2A5A96', '#2E7D5B', '#8B5CF6', '#C98A27', '#0284C7', '#B3402A'];
 
-// Convierte un objeto Date a 'YYYY-MM-DD' en hora LOCAL (sin desfasaje UTC)
 export const toDateStr = (date) => {
   const d = new Date(date);
   const year = d.getFullYear();
@@ -14,7 +13,6 @@ export const toDateStr = (date) => {
   return `${year}-${month}-${day}`;
 };
 
-// Parsea 'YYYY-MM-DD' a Date local a las 00:00:00 exactas
 export const parseLocalDate = (str) => {
   if (!str) return new Date();
   const [y, m, d] = str.split('-').map(Number);
@@ -23,6 +21,8 @@ export const parseLocalDate = (str) => {
 
 export function useDashboard() {
   const [ventas, setVentas] = useState([]);
+  const [pagosDeuda, setPagosDeuda] = useState([]);
+  const [clientesDeudaTotal, setClientesDeudaTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -35,48 +35,75 @@ export function useDashboard() {
   const [fechaInicio, setFechaInicio] = useState(primerDiaMes);
   const [fechaFin, setFechaFin] = useState(hoyStr);
 
+  const [filtroEstadoOperacion, setFiltroEstadoOperacion] = useState('todos');
+  const [busquedaOperacion, setBusquedaOperacion] = useState('');
   const [paginaActual, setPaginaActual] = useState(1);
 
   useEffect(() => {
     setPaginaActual(1);
-  }, [tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
+  }, [tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin, filtroEstadoOperacion, busquedaOperacion]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Traemos el historial con un margen de seguridad de 30 días hacia atrás
-      // para asegurar que las ventas del mes (como la del día 11) siempre estén en memoria
       const fechaCorte = new Date();
       fechaCorte.setDate(fechaCorte.getDate() - 30);
       fechaCorte.setHours(0, 0, 0, 0);
 
-      const { data, error: errSupabase } = await supabase
-        .from('ventas')
-        .select(`
-          id_venta,
-          creado_en,
-          total,
-          metodo_pago,
-          estado_pago,
-          fecha_vencimiento,
-          clientes ( nombre_razon_social ),
-          perfiles ( nombre_completo ),
-          ventas_detalle (
-            cantidad,
-            productos (
-              nombre,
-              categorias ( nombre )
+      const [resVentas, resClientes, resPagos] = await Promise.all([
+        supabase
+          .from('ventas')
+          .select(`
+            id_venta,
+            creado_en,
+            total,
+            metodo_pago,
+            estado_pago,
+            fecha_vencimiento,
+            cliente_id,
+            clientes ( id_cliente, nombre_razon_social, saldo_deudor ),
+            perfiles ( nombre_completo ),
+            ventas_detalle (
+              cantidad,
+              productos (
+                nombre,
+                categorias ( nombre )
+              )
             )
-          )
-        `)
-        .gte('creado_en', fechaCorte.toISOString())
-        .order('creado_en', { ascending: false });
+          `)
+          .gte('creado_en', fechaCorte.toISOString())
+          .order('creado_en', { ascending: false }),
 
-      if (errSupabase) throw errSupabase;
+        supabase
+          .from('clientes')
+          .select('saldo_deudor'),
 
-      const ventasFormateadas = (data || []).map(v => {
+        supabase
+          .from('pagos_clientes')
+          .select('id_pago, monto, metodo_pago, creado_en, cliente_id')
+          .gte('creado_en', fechaCorte.toISOString())
+      ]);
+
+      if (resVentas.error) throw resVentas.error;
+      if (resPagos.error) console.warn("Aviso tabla pagos_clientes:", resPagos.error);
+
+      const saldoTotalDeudores = (resClientes.data || []).reduce((acc, c) => acc + Number(c.saldo_deudor || 0), 0);
+      setClientesDeudaTotal(saldoTotalDeudores);
+
+      const pagosFormateados = (resPagos.data || []).map(p => {
+        const f = new Date(p.creado_en);
+        return {
+          id_pago: p.id_pago,
+          fecha: toDateStr(f),
+          monto: Number(p.monto || 0),
+          metodo_pago: p.metodo_pago || 'efectivo'
+        };
+      });
+      setPagosDeuda(pagosFormateados);
+
+      const ventasFormateadas = (resVentas.data || []).map(v => {
         const fechaLocal = new Date(v.creado_en);
         const detalles = v.ventas_detalle || [];
 
@@ -98,8 +125,10 @@ export function useDashboard() {
         return {
           id_venta: v.id_venta,
           fecha: toDateStr(fechaLocal),
+          fechaVisual: fechaLocal.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
           hora: fechaLocal.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
           cliente: v.clientes?.nombre_razon_social || 'Consumidor Final',
+          saldoDeudorCliente: Number(v.clientes?.saldo_deudor || 0),
           operador: v.perfiles?.nombre_completo || 'Operador',
           metodo_pago: v.metodo_pago || 'efectivo',
           estado_pago: v.estado_pago || 'pagado',
@@ -124,7 +153,6 @@ export function useDashboard() {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // Cálculo de KPIs y métricas del período
   const metricas = useMemo(() => {
     const enRango = (fechaStr) => {
       if (tipoFiltro === 'dia') return fechaStr === fechaSeleccionada;
@@ -145,30 +173,24 @@ export function useDashboard() {
     const finAntStr = toDateStr(finAnterior);
     const enRangoAnterior = (f) => f >= inicioAntStr && f <= finAntStr;
 
-    let ingresosTotales = 0;
-    let cobradoReal = 0;
-    let deudaPendiente = 0;
-    let ingresosAnt = 0;
-    let transacciones = 0;
-    let transaccionesAnt = 0;
+    let cobradoContado = 0;
+    let cobradoDeudas = 0;
+    let transaccionesValidas = 0;
+    let cobradoAnt = 0;
     const porCategoria = {};
     const pagos = { efectivo: 0, transferencia: 0, cuenta_corriente: 0 };
 
+    // 1. Ventas del período (excluyendo canceladas y pendientes)
     ventas.forEach(v => {
-      if (enRango(v.fecha)) {
-        ingresosTotales += v.total;
-        transacciones += 1;
+      if (v.estado_pago === 'cancelado') return;
 
-        if (v.estado_pago === 'pendiente') {
-          deudaPendiente += v.total;
-        } else {
-          cobradoReal += v.total;
+      if (enRango(v.fecha)) {
+        transaccionesValidas += 1;
+
+        if (v.estado_pago !== 'pendiente') {
+          cobradoContado += v.total;
           const metodo = v.metodo_pago || 'efectivo';
           pagos[metodo] = (pagos[metodo] || 0) + v.total;
-        }
-
-        if (v.metodo_pago === 'cuenta_corriente') {
-          pagos.cuenta_corriente += v.total;
         }
 
         Object.entries(v.categoriasCount).forEach(([cat, cant]) => {
@@ -177,12 +199,31 @@ export function useDashboard() {
       }
 
       if (enRangoAnterior(v.fecha)) {
-        ingresosAnt += v.total;
-        transaccionesAnt += 1;
+        if (v.estado_pago !== 'pendiente') {
+          cobradoAnt += v.total;
+        }
       }
     });
 
-    const pctIngresos = ingresosAnt > 0 ? Math.round(((ingresosTotales - ingresosAnt) / ingresosAnt) * 100) : null;
+    // 2. Pagos de deudas recibidos en el período (entran a la caja)
+    pagosDeuda.forEach(p => {
+      if (enRango(p.fecha)) {
+        cobradoDeudas += p.monto;
+        const metodo = p.metodo_pago || 'efectivo';
+        pagos[metodo] = (pagos[metodo] || 0) + p.monto;
+      }
+      if (enRangoAnterior(p.fecha)) {
+        cobradoAnt += p.monto;
+      }
+    });
+
+    // Caja total = Ventas contado ($15.000) + Cobros de deudas recibidos ($5.000) = $20.000
+    const ingresosTotales = cobradoContado + cobradoDeudas;
+    const deudaPendienteReal = Number(clientesDeudaTotal || 0);
+
+    pagos.cuenta_corriente = deudaPendienteReal;
+
+    const pctIngresos = cobradoAnt > 0 ? Math.round(((ingresosTotales - cobradoAnt) / cobradoAnt) * 100) : null;
     const totalUnidades = Object.values(porCategoria).reduce((a, b) => a + b, 0) || 1;
 
     const categoriasOrdenadas = Object.entries(porCategoria)
@@ -190,21 +231,19 @@ export function useDashboard() {
       .map(([nombre, cantidad]) => ({ nombre, cantidad }));
 
     return {
-      ingresosTotales,
-      cobradoReal,
-      deudaPendiente,
+      ingresosTotales,                          // Refleja $20.000
+      cobradoReal: ingresosTotales,             // Caja total en mano/bancos
+      deudaPendiente: deudaPendienteReal,       // Deuda restante real: $5.000
       pctIngresos,
-      transacciones,
-      ticketPromedio: transacciones > 0 ? Math.round(ingresosTotales / transacciones) : 0,
+      transacciones: transaccionesValidas,
+      ticketPromedio: transaccionesValidas > 0 ? Math.round(cobradoContado / transaccionesValidas) : 0,
       categoriasOrdenadas,
       totalUnidades,
       pagos
     };
-  }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
+  }, [ventas, pagosDeuda, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin, clientesDeudaTotal]);
 
-  // Gráfico de los últimos 7 días con formato de fecha y timezone seguro
   const tendencia7d = useMemo(() => {
-    // Si estamos viendo un día específico del pasado, centramos los 7 días en esa fecha
     const fechaBase = parseLocalDate(tipoFiltro === 'dia' ? fechaSeleccionada : hoyStr);
 
     return Array.from({ length: 7 }, (_, i) => {
@@ -212,26 +251,46 @@ export function useDashboard() {
       d.setDate(d.getDate() - (6 - i));
       const str = toDateStr(d);
 
-      const total = ventas
-        .filter(v => v.fecha === str && v.estado_pago !== 'pendiente')
+      const totalVentas = ventas
+        .filter(v => v.fecha === str && v.estado_pago !== 'pendiente' && v.estado_pago !== 'cancelado')
         .reduce((a, v) => a + v.total, 0);
 
-      // Nombre del día abreviado en español (lun, mar, mié...)
+      const totalPagos = pagosDeuda
+        .filter(p => p.fecha === str)
+        .reduce((a, p) => a + p.monto, 0);
+
+      const total = totalVentas + totalPagos;
       const label = d.toLocaleDateString('es-AR', { weekday: 'short' });
       return { str, total, label };
     });
-  }, [ventas, tipoFiltro, fechaSeleccionada, hoyStr]);
+  }, [ventas, pagosDeuda, tipoFiltro, fechaSeleccionada, hoyStr]);
 
   const maxBar = Math.max(...tendencia7d.map(d => d.total), 1);
 
-  // Filtro para la tabla de operaciones
   const ultimasVentas = useMemo(() => {
     const enRango = (f) => {
       if (tipoFiltro === 'dia') return f === fechaSeleccionada;
       return f >= fechaInicio && f <= fechaFin;
     };
-    return ventas.filter(v => enRango(v.fecha));
-  }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin]);
+
+    return ventas.filter(v => {
+      if (!enRango(v.fecha)) return false;
+
+      if (filtroEstadoOperacion !== 'todos' && v.estado_pago !== filtroEstadoOperacion) {
+        return false;
+      }
+
+      if (busquedaOperacion.trim()) {
+        const query = busquedaOperacion.toLowerCase();
+        const matchCliente = v.cliente.toLowerCase().includes(query);
+        const matchOperador = v.operador.toLowerCase().includes(query);
+        const matchArticulo = v.productoResumen.toLowerCase().includes(query);
+        if (!matchCliente && !matchOperador && !matchArticulo) return false;
+      }
+
+      return true;
+    });
+  }, [ventas, tipoFiltro, fechaSeleccionada, fechaInicio, fechaFin, filtroEstadoOperacion, busquedaOperacion]);
 
   const totalPaginas = Math.ceil(ultimasVentas.length / ITEMS_PER_PAGE) || 1;
 
@@ -245,7 +304,7 @@ export function useDashboard() {
     const headers = ["ID Venta", "Fecha", "Hora", "Operador", "Cliente", "Articulos", "Unidades", "Medio", "Estado Cobro", "Total"];
     const rows = ultimasVentas.map(v => [
       v.id_venta,
-      v.fecha,
+      v.fechaVisual,
       v.hora,
       `"${v.operador}"`,
       `"${v.cliente}"`,
@@ -280,6 +339,10 @@ export function useDashboard() {
     setFechaInicio,
     fechaFin,
     setFechaFin,
+    filtroEstadoOperacion,
+    setFiltroEstadoOperacion,
+    busquedaOperacion,
+    setBusquedaOperacion,
     paginaActual,
     setPaginaActual,
     totalPaginas,
@@ -288,6 +351,7 @@ export function useDashboard() {
     maxBar,
     ultimasVentas,
     ventasPaginadas,
-    exportarCSV
+    exportarCSV,
+    recargarDashboard: fetchDashboardData
   };
 }

@@ -67,14 +67,27 @@ export default function VentasProductoCard({
 
         <div className="form-group">
           <label>Cantidad</label>
-          <input
-            type="number"
-            min="1"
-            max={productoActivo?.stock_actual || 9999}
-            value={itemActual.cantidad}
-            onChange={(e) => setItemActual(prev => ({ ...prev, cantidad: parseInt(e.target.value) || 1 }))}
-            disabled={!itemActual.id_producto || saving}
-          />
+  <input
+    type="number"
+    min="1"
+    max={productoActivo?.stock_actual || 9999}
+    value={itemActual.cantidad}
+    onChange={(e) => {
+      const val = e.target.value;
+      // Permite dejar el campo vacío temporalmente mientras se tipea
+      setItemActual(prev => ({
+        ...prev,
+        cantidad: val === '' ? '' : parseInt(val, 10)
+      }));
+    }}
+    onBlur={() => {
+      // Si el usuario sale del input dejándolo vacío o menor a 1, restablece a 1
+      if (!itemActual.cantidad || Number(itemActual.cantidad) < 1) {
+        setItemActual(prev => ({ ...prev, cantidad: 1 }));
+      }
+    }}
+    disabled={!itemActual.id_producto || saving}
+  />
         </div>
       </div>
 

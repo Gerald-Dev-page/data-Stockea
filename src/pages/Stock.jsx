@@ -1,5 +1,5 @@
-// src/pages/Stock.jsx
-import { Boxes, AlertTriangle } from 'lucide-react';
+// En src/pages/Stock.jsx:
+import { Boxes, AlertTriangle, Truck, CheckCircle2 } from 'lucide-react';
 import '../styles/stock.css';
 
 import { useStock } from '../hooks/useStock';
@@ -15,6 +15,7 @@ export default function Stock() {
     saving,
     error,
     setError,
+    successMsg,
     activeTab,
     setActiveTab,
     busqueda,
@@ -41,7 +42,10 @@ export default function Stock() {
     ajusteForm,
     setAjusteForm,
     openAjusteModal,
-    handleConfirmarAjuste
+    handleConfirmarAjuste,
+    arribosPendientes,
+    handleConfirmarArribo,
+    clientes
   } = useStock();
 
   return (
@@ -57,11 +61,63 @@ export default function Stock() {
         </div>
       </header>
 
+      {/* Notificación de éxito */}
+      {successMsg && (
+        <div className="demo-toast" style={{ background: 'var(--color-success-soft)', borderColor: 'rgba(46, 125, 91, 0.4)', color: '#5EDBA2' }}>
+          <CheckCircle2 size={15} style={{ display: 'inline', marginRight: '6px' }} />
+          {successMsg}
+        </div>
+      )}
+
+      {/* Notificación de error */}
       {error && (
         <div className="demo-toast" style={{ background: 'var(--color-error-soft)', borderColor: 'rgba(179, 64, 42, 0.4)', color: '#F87171' }}>
           <AlertTriangle size={15} style={{ display: 'inline', marginRight: '6px' }} />
           {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#F87171', cursor: 'pointer' }}>✕</button>
+        </div>
+      )}
+
+      {/* ── Banner de Mercadería en Tránsito con Fecha Cumplida ── */}
+      {arribosPendientes.length > 0 && (
+        <div style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          {arribosPendientes.map(p => (
+            <div 
+              key={p.id_producto}
+              className="card"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                border: '1px solid rgba(201, 162, 39, 0.5)',
+                background: 'var(--color-bg-card)',
+                borderRadius: 'var(--radius-sm)',
+                gap: '1rem',
+                flexWrap: 'wrap'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Truck size={20} style={{ color: 'var(--color-accent)' }} />
+                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-heading)' }}>
+                  Llegada programada cumplida: <strong>{p.stock_transito} u.</strong> de <strong>{p.nombre}</strong> ({p.sku}).
+                  <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                    Fecha prevista: {p.fecha_estimada_llegada}
+                  </span>
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={saving}
+                onClick={() => handleConfirmarArribo(p)}
+                style={{ height: '32px', padding: '0 12px', fontSize: '0.76rem' }}
+              >
+                ¿Llegó el pedido? Confirmar Ingreso
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -111,6 +167,7 @@ export default function Stock() {
         setAjusteForm={setAjusteForm}
         onSubmit={handleConfirmarAjuste}
         saving={saving}
+        clientes={clientes}
       />
     </div>
   );

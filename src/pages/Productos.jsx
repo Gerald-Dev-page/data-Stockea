@@ -13,35 +13,39 @@ import ProductEditModal from '../components/productos/ProductEditModal';
 import ImageLightbox from '../components/productos/ImageLightbox';
 
 export default function Productos() {
-  const {
-    productos,
-    categorias,
-    setCategorias,
-    loading,
-    error,
-    setError,
-    toastMessage,
-    notify,
-    userId,
-    cotizacionDolar,
-    setCotizacionDolar,
-    guardandoDolar,
-    dolarGuardadoOk,
-    saveCotizacion,
-    busqueda,
-    setBusqueda,
-    categoriaFiltro,
-    setCategoriaFiltro,
-    paginaActual,
-    setPaginaActual,
-    totalPaginas,
-    productosFiltrados,
-    productosPaginados,
-    uploadFoto,
-    subiendoFoto,
-    calcularCostoUSD,
-    fetchInitialData
-  } = useProducts();
+const {
+  productos,
+  categorias,
+  setCategorias,
+  loading,
+  error,
+  setError,
+  toastMessage,
+  notify,
+  userId,
+  cotizacionDolar,
+  setCotizacionDolar,
+  guardandoDolar,
+  dolarGuardadoOk,
+  saveCotizacion,
+  busqueda,
+  setBusqueda,
+  categoriaFiltro,
+  setCategoriaFiltro,
+  paginaActual,
+  setPaginaActual,
+  totalPaginas,
+  productosFiltrados,
+  productosPaginados,
+  uploadFoto,
+  subiendoFoto,
+  calcularCostoUSD,
+  fetchInitialData,
+  aplicarIva,
+  setAplicarIva,
+  porcentajeIva,
+  setPorcentajeIva
+} = useProducts();
 
   const [fotoZoom, setFotoZoom] = useState(null);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -55,13 +59,17 @@ export default function Productos() {
           <p>Fichas técnicas maestras, costeo multimoneda y escalas mayoristas.</p>
         </div>
 
-        <DollarWidget
-          cotizacion={cotizacionDolar}
-          onChange={setCotizacionDolar}
-          onSave={saveCotizacion}
-          isSaving={guardandoDolar}
-          isSaved={dolarGuardadoOk}
-        />
+       <DollarWidget
+  cotizacion={cotizacionDolar}
+  onChange={setCotizacionDolar}
+  onSave={saveCotizacion}
+  isSaving={guardandoDolar}
+  isSaved={dolarGuardadoOk}
+  aplicarIva={aplicarIva}
+  onToggleIva={() => setAplicarIva(!aplicarIva)}
+  porcentajeIva={porcentajeIva}
+  onChangeIva={setPorcentajeIva}
+/>
       </header>
 
       {toastMessage && <div className="demo-toast">✓ {toastMessage}</div>}
@@ -94,22 +102,24 @@ export default function Productos() {
         setError={setError}
       />
 
-      <ProductTable
-        loading={loading}
-        productos={productosPaginados}
-        totalItems={productosFiltrados.length}
-        paginaActual={paginaActual}
-        totalPaginas={totalPaginas}
-        setPaginaActual={setPaginaActual}
-        busqueda={busqueda}
-        setBusqueda={setBusqueda}
-        categoriaFiltro={categoriaFiltro}
-        setCategoriaFiltro={setCategoriaFiltro}
-        categorias={categorias}
-        cotizacionDolar={cotizacionDolar}
-        onOpenEdit={(p) => setEditingProduct(p)}
-        onZoomFoto={(url) => setFotoZoom(url)}
-      />
+     <ProductTable
+  loading={loading}
+  productos={productosPaginados}
+  totalItems={productosFiltrados.length}
+  paginaActual={paginaActual}
+  totalPaginas={totalPaginas}
+  setPaginaActual={setPaginaActual}
+  busqueda={busqueda}
+  setBusqueda={setBusqueda}
+  categoriaFiltro={categoriaFiltro}
+  setCategoriaFiltro={setCategoriaFiltro}
+  categorias={categorias}
+  cotizacionDolar={cotizacionDolar}
+  aplicarIva={aplicarIva}
+  porcentajeIva={porcentajeIva}
+  onOpenEdit={(p) => setEditingProduct(p)}
+  onZoomFoto={(url) => setFotoZoom(url)}
+/>
 
       <CategoryModal
         show={showCategoryModal}

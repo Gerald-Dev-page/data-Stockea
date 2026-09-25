@@ -1,77 +1,132 @@
 // src/components/productos/DollarWidget.jsx
-import { Check } from 'lucide-react';
+import { DollarSign, Check, Percent } from 'lucide-react';
 
-export default function DollarWidget({ cotizacion, onChange, onSave, isSaving, isSaved }) {
+export default function DollarWidget({
+  cotizacion,
+  onChange,
+  onSave,
+  isSaving,
+  isSaved,
+  aplicarIva,
+  onToggleIva,
+  porcentajeIva = 21,
+  onChangeIva
+}) {
   return (
     <div 
+      className="dollar-widget-card" 
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: '0.75rem',
         background: 'var(--color-bg-card)',
-        border: '1px solid rgba(201, 162, 39, 0.35)',
-        padding: '6px 12px',
+        border: '1px solid rgba(201, 162, 39, 0.4)',
         borderRadius: 'var(--radius-sm)',
-        boxShadow: 'var(--shadow-sm)'
+        padding: '6px 12px',
+        flexWrap: 'wrap'
       }}
     >
-      <span 
-        style={{
-          fontSize: '0.78rem',
-          fontWeight: 600,
-          color: 'var(--color-accent)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        USD Hoy:
-      </span>
-
+      {/* ── Cotización USD ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', fontWeight: 600 }}>$</span>
-        <input 
-          type="number" 
-          value={cotizacion} 
-          onChange={(e) => onChange(e.target.value)}
-          style={{ 
-            width: '85px', 
-            height: '34px', 
-            fontSize: '0.9rem', 
-            fontWeight: 700, 
-            textAlign: 'right', 
-            padding: '2px 8px', 
-            background: 'var(--color-bg-main)', 
-            border: '1px solid var(--color-border)', 
-            borderRadius: '4px', 
-            color: 'var(--color-text-heading)', 
-            outline: 'none',
-            fontFamily: 'var(--font-main)'
-          }} 
-        />
+        <DollarSign size={16} style={{ color: 'var(--color-accent)' }} />
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+          USD Hoy:
+        </span>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <span style={{ position: 'absolute', left: '6px', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>$</span>
+          <input
+            type="number"
+            value={cotizacion}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              width: '85px',
+              height: '32px',
+              padding: '0 6px 0 16px',
+              background: 'var(--color-bg-main)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--color-text-heading)',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              outline: 'none'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Sección IVA (Al lado, sin el ON/OFF) ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '1px solid var(--color-border)', paddingLeft: '0.75rem' }}>
         <button
           type="button"
-          onClick={onSave}
-          disabled={isSaving}
+          onClick={onToggleIva}
           style={{
-            height: '34px',
-            padding: '0 12px',
-            background: isSaved ? 'var(--color-success-soft)' : 'var(--color-accent-soft)',
-            border: `1px solid ${isSaved ? 'rgba(94, 219, 162, 0.4)' : 'rgba(201, 162, 39, 0.4)'}`,
-            color: isSaved ? '#5EDBA2' : 'var(--color-accent)',
-            borderRadius: '4px',
+            background: aplicarIva ? 'var(--color-accent-soft)' : 'var(--color-bg-main)',
+            border: `1px solid ${aplicarIva ? 'var(--color-accent)' : 'var(--color-border)'}`,
+            color: aplicarIva ? 'var(--color-accent)' : 'var(--color-text-muted)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '4px 8px',
+            fontSize: '0.74rem',
+            fontWeight: 700,
             cursor: 'pointer',
-            fontSize: '0.76rem',
-            fontWeight: 600,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
+            gap: '3px',
+            height: '32px',
             transition: 'var(--transition)'
           }}
+          title="Activar o desactivar cálculo descontando IVA"
         >
-          <Check size={14} /> {isSaving ? '...' : isSaved ? 'Listo!' : 'Guardar'}
+          <Percent size={12} /> IVA
         </button>
+
+        {/* Input editable del porcentaje de IVA */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <input
+            type="number"
+            step="0.5"
+            min="0"
+            max="100"
+            value={porcentajeIva}
+            onChange={(e) => onChangeIva ? onChangeIva(e.target.value) : null}
+            disabled={!aplicarIva}
+            style={{
+              width: '60px',
+              height: '32px',
+              padding: '0 16px 0 8px',
+              background: 'var(--color-bg-main)',
+              border: `1px solid ${aplicarIva ? 'rgba(201, 162, 39, 0.4)' : 'var(--color-border)'}`,
+              borderRadius: 'var(--radius-sm)',
+              color: aplicarIva ? 'var(--color-text-heading)' : 'var(--color-text-muted)',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              outline: 'none',
+              textAlign: 'center',
+              opacity: aplicarIva ? 1 : 0.45,
+              cursor: aplicarIva ? 'text' : 'not-allowed'
+            }}
+          />
+          <span style={{ position: 'absolute', right: '5px', color: 'var(--color-text-muted)', fontSize: '0.75rem', pointerEvents: 'none' }}>%</span>
+        </div>
       </div>
+
+      {/* ── Botón Fijar / Guardar ── */}
+      <button
+        type="button"
+        className="btn-primary"
+        onClick={onSave}
+        disabled={isSaving}
+        style={{
+          height: '32px',
+          padding: '0 10px',
+          fontSize: '0.75rem',
+          fontWeight: 600,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}
+      >
+        {isSaving ? '...' : isSaved ? <><Check size={13} /> Ok</> : 'Fijar'}
+      </button>
     </div>
   );
 }

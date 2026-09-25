@@ -57,7 +57,9 @@ export default function Ventas() {
     handleSeleccionarMetodoPago,
     handleAsignarConsumidorFinal,
     handleConfirmarVenta,
-    cancelarVenta
+    cancelarVenta,
+    reservasCliente,
+  handleCargarReservaAlTicket
   } = useVentas();
 
   const [ventaParaAnular, setVentaParaAnular] = useState(null);
@@ -119,19 +121,21 @@ export default function Ventas() {
 
         <div>
           <VentasTicketCard
-            carrito={carrito}
-            totalFactura={totalFactura}
-            metodoPago={metodoPago}
-            onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
-            esPendiente={esPendiente}
-            setEsPendiente={setEsPendiente}
-            fechaVencimiento={fechaVencimiento}
-            setFechaVencimiento={setFechaVencimiento}
-            onEliminarItem={handleEliminarItemCarrito}
-            onConfirmar={handleConfirmarVenta}
-            disabledSubmit={saving || carrito.length === 0}
-            saving={saving}
-          />
+  carrito={carrito}
+  totalFactura={totalFactura}
+  metodoPago={metodoPago}
+  onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
+  esPendiente={esPendiente}
+  setEsPendiente={setEsPendiente}
+  fechaVencimiento={fechaVencimiento}
+  setFechaVencimiento={setFechaVencimiento}
+  onEliminarItem={handleEliminarItemCarrito}
+  onConfirmar={handleConfirmarVenta}
+  disabledSubmit={saving || carrito.length === 0 || !clienteId}
+  saving={saving}
+  reservasCliente={reservasCliente}                
+  onCargarReserva={handleCargarReservaAlTicket}    
+/>
         </div>
       </div>
 
