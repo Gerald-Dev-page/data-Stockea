@@ -62,6 +62,10 @@ export function useDashboard() {
             metodo_pago,
             estado_pago,
             fecha_vencimiento,
+            observaciones,
+            pago_mixto,
+            interes_porcentaje,
+            monto_interes,
             cliente_id,
             clientes ( id_cliente, nombre_razon_social, saldo_deudor ),
             perfiles ( nombre_completo ),
@@ -133,6 +137,10 @@ export function useDashboard() {
           metodo_pago: v.metodo_pago || 'efectivo',
           estado_pago: v.estado_pago || 'pagado',
           fecha_vencimiento: v.fecha_vencimiento || null,
+          observaciones: v.observaciones || '',
+          pago_mixto: v.pago_mixto || null,
+          interes_porcentaje: Number(v.interes_porcentaje || 0),
+          monto_interes: Number(v.monto_interes || 0),
           total: Number(v.total || 0),
           totalUnidades,
           categoriasCount,
@@ -180,14 +188,22 @@ export function useDashboard() {
     const porCategoria = {};
     const pagos = { efectivo: 0, transferencia: 0, cuenta_corriente: 0 };
 
-    // 1. Ventas del período (excluyendo canceladas y pendientes)
     ventas.forEach(v => {
       if (v.estado_pago === 'cancelado') return;
 
       if (enRango(v.fecha)) {
         transaccionesValidas += 1;
 
-        if (v.estado_pago !== 'pendiente') {
+        if (v.metodo_pago === 'mixto' && v.pago_mixto) {
+          // Desglose de pago combinado
+          const cobroEfectivo = Number(v.pago_mixto.efectivo || 0);
+          const cobroTransf = Number(v.pago_mixto.transferencia || 0);
+
+          cobradoContado += (cobroEfectivo + cobroTransf);
+          pagos.efectivo += cobroEfectivo;
+          pagos.transferencia += cobroTransf;
+        } else if (v.estado_pago !== 'pendiente') {
+          // Pago simple al contado (Efectivo o Transferencia)
           cobradoContado += v.total;
           const metodo = v.metodo_pago || 'efectivo';
           pagos[metodo] = (pagos[metodo] || 0) + v.total;
@@ -199,13 +215,15 @@ export function useDashboard() {
       }
 
       if (enRangoAnterior(v.fecha)) {
-        if (v.estado_pago !== 'pendiente') {
+        if (v.metodo_pago === 'mixto' && v.pago_mixto) {
+          cobradoAnt += (Number(v.pago_mixto.efectivo || 0) + Number(v.pago_mixto.transferencia || 0));
+        } else if (v.estado_pago !== 'pendiente') {
           cobradoAnt += v.total;
         }
       }
     });
 
-    // 2. Pagos de deudas recibidos en el período (entran a la caja)
+    // Pagos de cuotas/deudas ingresados a caja
     pagosDeuda.forEach(p => {
       if (enRango(p.fecha)) {
         cobradoDeudas += p.monto;
@@ -217,7 +235,6 @@ export function useDashboard() {
       }
     });
 
-    // Caja total = Ventas contado ($15.000) + Cobros de deudas recibidos ($5.000) = $20.000
     const ingresosTotales = cobradoContado + cobradoDeudas;
     const deudaPendienteReal = Number(clientesDeudaTotal || 0);
 
@@ -231,9 +248,9 @@ export function useDashboard() {
       .map(([nombre, cantidad]) => ({ nombre, cantidad }));
 
     return {
-      ingresosTotales,                          // Refleja $20.000
-      cobradoReal: ingresosTotales,             // Caja total en mano/bancos
-      deudaPendiente: deudaPendienteReal,       // Deuda restante real: $5.000
+      ingresosTotales,
+      cobradoReal: ingresosTotales,
+      deudaPendiente: deudaPendienteReal,
       pctIngresos,
       transacciones: transaccionesValidas,
       ticketPromedio: transaccionesValidas > 0 ? Math.round(cobradoContado / transaccionesValidas) : 0,
@@ -252,8 +269,16 @@ export function useDashboard() {
       const str = toDateStr(d);
 
       const totalVentas = ventas
-        .filter(v => v.fecha === str && v.estado_pago !== 'pendiente' && v.estado_pago !== 'cancelado')
-        .reduce((a, v) => a + v.total, 0);
+        .filter(v => v.fecha === str && v.estado_pago !== 'cancelado')
+        .reduce((a, v) => {
+          if (v.metodo_pago === 'mixto' && v.pago_mixto) {
+            return a + (Number(v.pago_mixto.efectivo || 0) + Number(v.pago_mixto.transferencia || 0));
+          }
+          if (v.estado_pago !== 'pendiente') {
+            return a + v.total;
+          }
+          return a;
+        }, 0);
 
       const totalPagos = pagosDeuda
         .filter(p => p.fecha === str)
@@ -285,7 +310,8 @@ export function useDashboard() {
         const matchCliente = v.cliente.toLowerCase().includes(query);
         const matchOperador = v.operador.toLowerCase().includes(query);
         const matchArticulo = v.productoResumen.toLowerCase().includes(query);
-        if (!matchCliente && !matchOperador && !matchArticulo) return false;
+        const matchObs = v.observaciones.toLowerCase().includes(query);
+        if (!matchCliente && !matchOperador && !matchArticulo && !matchObs) return false;
       }
 
       return true;
@@ -301,7 +327,7 @@ export function useDashboard() {
 
   const exportarCSV = () => {
     if (ultimasVentas.length === 0) return;
-    const headers = ["ID Venta", "Fecha", "Hora", "Operador", "Cliente", "Articulos", "Unidades", "Medio", "Estado Cobro", "Total"];
+    const headers = ["ID Venta", "Fecha", "Hora", "Operador", "Cliente", "Articulos", "Unidades", "Medio", "Estado Cobro", "Total", "Observaciones"];
     const rows = ultimasVentas.map(v => [
       v.id_venta,
       v.fechaVisual,
@@ -312,7 +338,8 @@ export function useDashboard() {
       v.totalUnidades,
       v.metodo_pago,
       v.estado_pago,
-      v.total
+      v.total,
+      `"${(v.observaciones || '').replace(/"/g, '""')}"`
     ]);
 
     const csvContent = "data:text/csv;charset=utf-8,"

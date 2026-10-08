@@ -1,12 +1,13 @@
 // src/components/clientes/ModalSaldarDeuda.jsx
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Banknote, Landmark } from 'lucide-react';
 
 const formatPrice = (n) =>
   Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
 
 export default function ModalSaldarDeuda({ cliente, onClose, onPagar, saving }) {
   const [montoPago, setMontoPago] = useState('');
+  const [metodoPago, setMetodoPago] = useState('efectivo'); // 'efectivo' | 'transferencia'
 
   useEffect(() => {
     if (cliente) {
@@ -18,7 +19,7 @@ export default function ModalSaldarDeuda({ cliente, onClose, onPagar, saving }) 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onPagar(cliente, montoPago);
+    onPagar(cliente, montoPago, metodoPago);
   };
 
   return (
@@ -38,6 +39,31 @@ export default function ModalSaldarDeuda({ cliente, onClose, onPagar, saving }) 
           <div style={{ padding: '10px 14px', background: 'var(--color-error-soft)', border: '1px solid rgba(179, 64, 42, 0.4)', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '0.8rem', color: '#F87171', fontWeight: 600 }}>Deuda Exigible:</span>
             <strong style={{ fontSize: '1.15rem', color: '#F87171' }}>{formatPrice(cliente.saldo_deudor)}</strong>
+          </div>
+
+          {/* Selector de Medio de Ingreso a Caja */}
+          <div className="form-group" style={{ marginBottom: '1rem' }}>
+            <label style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+              Medio de Cobro Recibido
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                type="button"
+                className={`metodo-pago-btn ${metodoPago === 'efectivo' ? 'active-efectivo' : ''}`}
+                onClick={() => setMetodoPago('efectivo')}
+                style={{ height: '36px', fontSize: '0.78rem' }}
+              >
+                <Banknote size={15} /> Efectivo
+              </button>
+              <button
+                type="button"
+                className={`metodo-pago-btn ${metodoPago === 'transferencia' ? 'active-transferencia' : ''}`}
+                onClick={() => setMetodoPago('transferencia')}
+                style={{ height: '36px', fontSize: '0.78rem' }}
+              >
+                <Landmark size={15} /> Transferencia
+              </button>
+            </div>
           </div>
 
           <div className="form-group">

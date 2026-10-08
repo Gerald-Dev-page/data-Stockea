@@ -59,6 +59,14 @@ export default function Ventas() {
     handleConfirmarVenta,
     cancelarVenta,
     reservasCliente,
+    subtotalCarrito,
+  montoInteres,
+  observaciones,
+  setObservaciones,
+  pagoMixto,
+  setPagoMixto,
+  interesPorcentaje,
+  setInteresPorcentaje,
   handleCargarReservaAlTicket
   } = useVentas();
 
@@ -122,19 +130,27 @@ export default function Ventas() {
         <div>
           <VentasTicketCard
   carrito={carrito}
+  subtotalCarrito={subtotalCarrito}
   totalFactura={totalFactura}
+  montoInteres={montoInteres}
   metodoPago={metodoPago}
   onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
   esPendiente={esPendiente}
   setEsPendiente={setEsPendiente}
   fechaVencimiento={fechaVencimiento}
   setFechaVencimiento={setFechaVencimiento}
+  observaciones={observaciones}
+  setObservaciones={setObservaciones}
+  pagoMixto={pagoMixto}
+  setPagoMixto={setPagoMixto}
+  interesPorcentaje={interesPorcentaje}
+  setInteresPorcentaje={setInteresPorcentaje}
   onEliminarItem={handleEliminarItemCarrito}
   onConfirmar={handleConfirmarVenta}
   disabledSubmit={saving || carrito.length === 0 || !clienteId}
   saving={saving}
-  reservasCliente={reservasCliente}                
-  onCargarReserva={handleCargarReservaAlTicket}    
+  reservasCliente={reservasCliente}
+  onCargarReserva={handleCargarReservaAlTicket}
 />
         </div>
       </div>

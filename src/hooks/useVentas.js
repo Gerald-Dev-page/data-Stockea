@@ -20,13 +20,22 @@ export function useVentas() {
   const [reservasCliente, setReservasCliente] = useState([]);
   const [cargandoReservas, setCargandoReservas] = useState(false);
 
-  const [metodoPago, setMetodoPago] = useState('efectivo');
+  const [metodoPago, setMetodoPago] = useState('efectivo'); // 'efectivo', 'transferencia', 'cuenta_corriente', 'mixto'
   const [esPendiente, setEsPendiente] = useState(false);
   const [fechaVencimiento, setFechaVencimiento] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 15);
     return d.toISOString().split('T')[0];
   });
+
+  // ── Nuevos Campos de Operatoria Comercial ──
+  const [observaciones, setObservaciones] = useState('');
+  const [pagoMixto, setPagoMixto] = useState({
+    efectivo: '',
+    transferencia: '',
+    cta_cte: ''
+  });
+  const [interesPorcentaje, setInteresPorcentaje] = useState(0);
 
   const [itemActual, setItemActual] = useState({
     id_producto: '',
@@ -70,6 +79,10 @@ export function useVentas() {
             metodo_pago,
             estado_pago,
             fecha_vencimiento,
+            observaciones,
+            pago_mixto,
+            interes_porcentaje,
+            monto_interes,
             cliente_id,
             clientes ( nombre_razon_social ),
             perfiles ( nombre_completo ),
@@ -104,7 +117,6 @@ export function useVentas() {
     fetchInitialData();
   }, [fetchInitialData]);
 
-  // Cargar reservas activas cuando cambia el cliente seleccionado
   useEffect(() => {
     if (!clienteId) {
       setReservasCliente([]);
@@ -167,10 +179,10 @@ export function useVentas() {
     setItemActual(prev => ({ ...prev, tipo_precio: tipo, precio_unitario: precio }));
   };
 
- const handleAgregarAlCarrito = () => {
+  const handleAgregarAlCarrito = () => {
     const cantNumerica = parseInt(itemActual.cantidad, 10);
     if (!itemActual.id_producto || isNaN(cantNumerica) || cantNumerica <= 0) return;
-    
+
     const prod = catalogo.find(p => String(p.id_producto) === String(itemActual.id_producto));
     if (!prod) return;
 
@@ -211,7 +223,6 @@ export function useVentas() {
     setItemActual({ id_producto: '', tipo_precio: itemActual.tipo_precio, cantidad: 1, precio_unitario: 0 });
   };
 
-  // Acción rápida: Cargar reserva asignada directamente al ticket
   const handleCargarReservaAlTicket = (reserva) => {
     const prod = catalogo.find(p => String(p.id_producto) === String(reserva.producto_id)) || reserva.productos;
     if (!prod) return;
@@ -219,7 +230,6 @@ export function useVentas() {
     const precio = Number(prod.precio_venta || 0);
     const cant = Number(reserva.cantidad || 1);
 
-    // Verificamos si ya está en el carrito para no duplicarlo
     const yaEnCarrito = carrito.find(i => String(i.id_producto) === String(prod.id_producto));
     if (yaEnCarrito) {
       setCarrito(carrito.map(i => String(i.id_producto) === String(prod.id_producto)
@@ -246,7 +256,6 @@ export function useVentas() {
       }]);
     }
 
-    // Retiramos temporalmente la reserva de la lista visible para evitar doble inserción
     setReservasCliente(prev => prev.filter(r => r.id_reserva !== reserva.id_reserva));
   };
 
@@ -258,6 +267,8 @@ export function useVentas() {
     setMetodoPago(metodo);
     if (metodo === 'cuenta_corriente') {
       setEsPendiente(true);
+    } else if (metodo !== 'mixto') {
+      setEsPendiente(false);
     }
   };
 
@@ -273,7 +284,26 @@ export function useVentas() {
     }
   };
 
-  const totalFactura = carrito.reduce((acc, i) => acc + i.total, 0);
+  const subtotalCarrito = carrito.reduce((acc, i) => acc + i.total, 0);
+
+  // Cálculo de importe a financiar y recargo por interés
+  const montoAFinanciarBase = useMemo(() => {
+    if (metodoPago === 'cuenta_corriente' || esPendiente) {
+      return subtotalCarrito;
+    }
+    if (metodoPago === 'mixto') {
+      return Number(pagoMixto.cta_cte || 0);
+    }
+    return 0;
+  }, [metodoPago, esPendiente, subtotalCarrito, pagoMixto.cta_cte]);
+
+  const montoInteres = useMemo(() => {
+    const pct = Number(interesPorcentaje || 0);
+    if (pct <= 0 || montoAFinanciarBase <= 0) return 0;
+    return Math.round((montoAFinanciarBase * pct) / 100);
+  }, [montoAFinanciarBase, interesPorcentaje]);
+
+  const totalFactura = subtotalCarrito + montoInteres;
 
   const handleConfirmarVenta = async () => {
     if (!clienteId) {
@@ -289,6 +319,23 @@ export function useVentas() {
       return;
     }
 
+    // Validaciones de Pago Mixto
+    let montoEfectivo = 0;
+    let montoTransf = 0;
+    let montoCtaCte = 0;
+
+    if (metodoPago === 'mixto') {
+      montoEfectivo = Number(pagoMixto.efectivo || 0);
+      montoTransf = Number(pagoMixto.transferencia || 0);
+      montoCtaCte = Number(pagoMixto.cta_cte || 0);
+
+      const sumaIngresadaBase = montoEfectivo + montoTransf + montoCtaCte;
+      if (Math.abs(sumaIngresadaBase - subtotalCarrito) > 1) {
+        setError(`En pago combinado, la suma ($${sumaIngresadaBase}) debe coincidir con el total ($${subtotalCarrito}).`);
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
 
@@ -296,11 +343,17 @@ export function useVentas() {
       const clienteSeleccionado = clientes.find(c => String(c.id_cliente) === String(clienteId));
       const esConsumidorFinal = clienteSeleccionado?.nombre_razon_social?.toLowerCase().includes('consumidor final');
 
-      if (esPendiente && esConsumidorFinal) {
-        throw new Error("No se puede emitir una venta pendiente de pago a Consumidor Final.");
+      const tieneDeuda = (metodoPago === 'cuenta_corriente') || esPendiente || (metodoPago === 'mixto' && montoCtaCte > 0);
+
+      if (tieneDeuda && esConsumidorFinal) {
+        throw new Error("No se puede otorgar financiación o crédito a Consumidor Final.");
       }
 
-      // 1. Crear cabecera de la venta
+      const estadoPagoFinal = (metodoPago === 'cuenta_corriente' || esPendiente) 
+        ? 'pendiente' 
+        : (metodoPago === 'mixto' && montoCtaCte > 0) ? 'parcial' : 'pagado';
+
+      // 1. Insertar venta
       const { data: ventaReq, error: errVenta } = await supabase
         .from('ventas')
         .insert([{
@@ -308,15 +361,23 @@ export function useVentas() {
           usuario_id: userId,
           total: totalFactura,
           metodo_pago: metodoPago,
-          estado_pago: esPendiente ? 'pendiente' : 'pagado',
-          fecha_vencimiento: esPendiente ? fechaVencimiento : null
+          estado_pago: estadoPagoFinal,
+          fecha_vencimiento: tieneDeuda ? fechaVencimiento : null,
+          observaciones: observaciones.trim() || null,
+          pago_mixto: metodoPago === 'mixto' ? {
+            efectivo: montoEfectivo,
+            transferencia: montoTransf,
+            cta_cte: montoCtaCte + montoInteres
+          } : null,
+          interes_porcentaje: Number(interesPorcentaje || 0),
+          monto_interes: montoInteres
         }])
         .select()
         .single();
 
       if (errVenta) throw errVenta;
 
-      // 2. Insertar detalles de la venta
+      // 2. Insertar detalles
       const detallesInsert = carrito.map(item => ({
         venta_id: ventaReq.id_venta,
         producto_id: item.id_producto,
@@ -327,14 +388,12 @@ export function useVentas() {
       const { error: errDetalles } = await supabase.from('ventas_detalle').insert(detallesInsert);
       if (errDetalles) throw errDetalles;
 
-      // 3. Descontar stock y liquidar reservas si correspondiera
+      // 3. Descontar stock físico y de reservas
       for (const item of carrito) {
         const prod = catalogo.find(p => String(p.id_producto) === String(item.id_producto));
         const nuevoFisico = (prod?.stock_actual || 0) - item.cantidad;
-
         const updateData = { stock_actual: nuevoFisico };
 
-        // Si el artículo venía de una reserva, descontamos también stock_reservado
         if (item.es_reserva) {
           const nuevoReservado = Math.max(0, (prod?.stock_reservado || 0) - item.cantidad);
           updateData.stock_reservado = nuevoReservado;
@@ -357,17 +416,28 @@ export function useVentas() {
         }]);
       }
 
-      // 4. Si es cuenta corriente / pendiente, ajustar saldo deudor
-      if (esPendiente && clienteSeleccionado) {
+      // 4. Actualizar saldo del cliente según la parte financiada + interés
+      if (tieneDeuda && clienteSeleccionado) {
         const saldoPrevio = Number(clienteSeleccionado.saldo_deudor || 0);
-        await supabase.from('clientes').update({ saldo_deudor: saldoPrevio + totalFactura }).eq('id_cliente', clienteId);
+        const montoDeudaASumar = metodoPago === 'mixto' 
+          ? (montoCtaCte + montoInteres)
+          : totalFactura;
+
+        await supabase
+          .from('clientes')
+          .update({ saldo_deudor: saldoPrevio + montoDeudaASumar })
+          .eq('id_cliente', clienteId);
       }
 
+      // Limpiar formulario
       setCarrito([]);
       setClienteId('');
       setReservasCliente([]);
       setMetodoPago('efectivo');
       setEsPendiente(false);
+      setObservaciones('');
+      setPagoMixto({ efectivo: '', transferencia: '', cta_cte: '' });
+      setInteresPorcentaje(0);
 
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
@@ -387,7 +457,7 @@ export function useVentas() {
       const { data: ventaTarget, error: errVenta } = await supabase
         .from('ventas')
         .select(`
-          id_venta, cliente_id, total, estado_pago,
+          id_venta, cliente_id, total, estado_pago, metodo_pago, pago_mixto,
           ventas_detalle ( producto_id, cantidad )
         `)
         .eq('id_venta', id_venta)
@@ -423,19 +493,29 @@ export function useVentas() {
           }]);
       }
 
-      if (ventaTarget.estado_pago === 'pendiente' && ventaTarget.cliente_id) {
-        const { data: cli } = await supabase
-          .from('clientes')
-          .select('saldo_deudor')
-          .eq('id_cliente', ventaTarget.cliente_id)
-          .single();
+      // Restituir deuda del cliente según el tipo de venta
+      if (ventaTarget.cliente_id) {
+        let montoARestar = 0;
+        if (ventaTarget.estado_pago === 'pendiente') {
+          montoARestar = Number(ventaTarget.total || 0);
+        } else if (ventaTarget.metodo_pago === 'mixto' && ventaTarget.pago_mixto?.cta_cte) {
+          montoARestar = Number(ventaTarget.pago_mixto.cta_cte || 0);
+        }
 
-        if (cli) {
-          const nuevoSaldo = Math.max(0, Number(cli.saldo_deudor || 0) - Number(ventaTarget.total || 0));
-          await supabase
+        if (montoARestar > 0) {
+          const { data: cli } = await supabase
             .from('clientes')
-            .update({ saldo_deudor: nuevoSaldo })
-            .eq('id_cliente', ventaTarget.cliente_id);
+            .select('saldo_deudor')
+            .eq('id_cliente', ventaTarget.cliente_id)
+            .single();
+
+          if (cli) {
+            const nuevoSaldo = Math.max(0, Number(cli.saldo_deudor || 0) - montoARestar);
+            await supabase
+              .from('clientes')
+              .update({ saldo_deudor: nuevoSaldo })
+              .eq('id_cliente', ventaTarget.cliente_id);
+          }
         }
       }
 
@@ -468,9 +548,10 @@ export function useVentas() {
         const tieneArticulo = (v.ventas_detalle || []).some(d =>
           (d.productos?.nombre || '').toLowerCase().includes(q)
         );
+        const matchObs = (v.observaciones || '').toLowerCase().includes(q);
         const matchId = String(v.id_venta).toLowerCase().includes(q);
 
-        if (!clienteNom.includes(q) && !operadorNom.includes(q) && !tieneArticulo && !matchId) {
+        if (!clienteNom.includes(q) && !operadorNom.includes(q) && !tieneArticulo && !matchObs && !matchId) {
           return false;
         }
       }
@@ -537,6 +618,16 @@ export function useVentas() {
     setEsPendiente,
     fechaVencimiento,
     setFechaVencimiento,
+    observaciones,
+    setObservaciones,
+    pagoMixto,
+    setPagoMixto,
+    interesPorcentaje,
+    setInteresPorcentaje,
+    montoAFinanciarBase,
+    montoInteres,
+    subtotalCarrito,
+    totalFactura,
     paginaActual,
     setPaginaActual,
     totalPaginas,
@@ -554,7 +645,6 @@ export function useVentas() {
     setFiltroFechaHasta,
     limpiarFiltros,
     totalDia,
-    totalFactura,
     handleProductoChange,
     handleTipoPrecioChange,
     handleAgregarAlCarrito,

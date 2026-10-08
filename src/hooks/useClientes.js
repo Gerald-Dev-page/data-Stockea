@@ -10,6 +10,7 @@ export function useClientes() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
+  const [userId, setUserId] = useState(null);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos'); // 'todos' | 'deuda' | 'al_dia'
@@ -22,6 +23,12 @@ export function useClientes() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3500);
   };
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserId(user.id);
+    });
+  }, []);
 
   const fetchClientes = useCallback(async () => {
     try {
@@ -128,7 +135,7 @@ export function useClientes() {
     }
   };
 
-  const registrarPago = async (cliente, monto) => {
+  const registrarPago = async (cliente, monto, metodoPago = 'efectivo') => {
     const abono = parseFloat(monto) || 0;
     if (abono <= 0 || !cliente) return false;
 
@@ -138,6 +145,7 @@ export function useClientes() {
       const saldoActual = Number(cliente.saldo_deudor || 0);
       const nuevoSaldo = Math.max(0, saldoActual - abono);
 
+      // 1. Actualizar saldo del cliente
       const { error: errSaldo } = await supabase
         .from('clientes')
         .update({ saldo_deudor: nuevoSaldo })
@@ -145,6 +153,20 @@ export function useClientes() {
 
       if (errSaldo) throw errSaldo;
 
+      // 2. Insertar el cobro en pagos_clientes (impacta caja del Dashboard)
+      const { error: errPago } = await supabase
+        .from('pagos_clientes')
+        .insert([{
+          cliente_id: cliente.id_cliente,
+          usuario_id: userId || null,
+          monto: abono,
+          metodo_pago: metodoPago,
+          notas: `Amortización de deuda. Saldo anterior: $${saldoActual.toLocaleString('es-AR')} | Saldo restante: $${nuevoSaldo.toLocaleString('es-AR')}`
+        }]);
+
+      if (errPago) console.warn("Aviso al registrar en pagos_clientes:", errPago.message);
+
+      // 3. Si saldó la totalidad, actualizar ventas pendientes
       if (nuevoSaldo === 0) {
         await supabase
           .from('ventas')
@@ -154,7 +176,7 @@ export function useClientes() {
       }
 
       setPayingClient(null);
-      notify(`Cobranza asentada con éxito. Saldo restante: $${nuevoSaldo.toLocaleString('es-AR')}`);
+      notify(`Cobranza asentada con éxito (${metodoPago.toUpperCase()}). Saldo restante: $${nuevoSaldo.toLocaleString('es-AR')}`);
       fetchClientes();
       return true;
     } catch (err) {

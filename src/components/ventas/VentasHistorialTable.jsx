@@ -1,5 +1,6 @@
 // src/components/ventas/VentasHistorialTable.jsx
-import { Clock, ChevronLeft, ChevronRight, Ban, Search, Filter, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, ChevronLeft, ChevronRight, Ban, Search, RotateCcw, FileText, X } from 'lucide-react';
 
 const formatPrice = (n) =>
   Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -28,10 +29,93 @@ export default function VentasHistorialTable({
   onCancelarVenta,
   saving
 }) {
+  const [notaActiva, setNotaActiva] = useState(null);
   const hayFiltrosActivos = busqueda || filtroCliente !== 'todos' || filtroEstado !== 'todos' || fechaDesde || fechaHasta;
 
   return (
-    <div className="card table-card" style={{ marginTop: '1.5rem' }}>
+    <div className="card table-card" style={{ marginTop: '1.5rem', position: 'relative' }}>
+      {/* ── Modal Pop-over para leer la observación completa ── */}
+      {notaActiva && (
+        <div 
+          onClick={() => setNotaActiva(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(3, 8, 15, 0.7)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #09121D 0%, #0c1827 100%)',
+              border: '1px solid rgba(201, 162, 39, 0.4)',
+              borderRadius: 'var(--radius-sm)',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+              maxWidth: '420px',
+              width: '100%',
+              padding: '1.25rem'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-accent)', fontSize: '0.85rem', fontWeight: 600 }}>
+                <FileText size={15} /> Observación de Venta #{notaActiva.id_venta}
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setNotaActiva(null)}
+                style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', padding: '2px' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', marginBottom: '8px' }}>
+              Cliente: <strong style={{ color: 'var(--color-text-heading)' }}>{notaActiva.cliente}</strong> • Fecha: {notaActiva.fecha}
+            </div>
+
+            <div style={{ 
+              background: 'var(--color-bg-main)', 
+              border: '1px solid var(--color-border)', 
+              borderRadius: 'var(--radius-sm)', 
+              padding: '10px', 
+              fontSize: '0.82rem', 
+              color: 'var(--color-text-main)', 
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap',
+              maxHeight: '180px',
+              overflowY: 'auto'
+            }}>
+              {notaActiva.texto}
+            </div>
+
+            <div style={{ textAlign: 'right', marginTop: '1rem' }}>
+              <button
+                type="button"
+                onClick={() => setNotaActiva(null)}
+                style={{
+                  background: 'var(--color-accent)',
+                  border: 'none',
+                  color: '#FFF',
+                  padding: '6px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cabecera Principal */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '8px' }}>
         <h3 className="table-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -63,7 +147,7 @@ export default function VentasHistorialTable({
             <Search size={14} style={{ position: 'absolute', left: '10px', color: 'var(--color-text-muted)' }} />
             <input
               type="text"
-              placeholder="Cliente, operador, artículo..."
+              placeholder="Cliente, operador, observación..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{
@@ -131,11 +215,12 @@ export default function VentasHistorialTable({
             <option value="todos">Todos los estados</option>
             <option value="pagado">Cobrado / Pagado</option>
             <option value="pendiente">Pendiente (Deuda)</option>
+            <option value="parcial">Cobro Parcial / Mixto</option>
             <option value="cancelado">Anulada / Cancelada</option>
           </select>
         </div>
 
-        {/* 4. Rango de Fechas (Desde / Hasta) */}
+        {/* 4. Rango de Fechas */}
         <div className="form-group" style={{ margin: 0 }}>
           <label style={{ fontSize: '0.72rem', color: 'var(--color-accent)', textTransform: 'uppercase', fontWeight: 600 }}>Desde</label>
           <input
@@ -176,7 +261,7 @@ export default function VentasHistorialTable({
           />
         </div>
 
-        {/* 5. Cantidad de Filas por Página & Reset */}
+        {/* 5. Filas por Página & Reset */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <div style={{ flex: 1 }}>
             <label style={{ fontSize: '0.72rem', color: 'var(--color-accent)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
@@ -232,7 +317,7 @@ export default function VentasHistorialTable({
         </div>
       </div>
 
-      {/* ── Tabla de Historial con Scroll Horizontal Táctil ── */}
+      {/* ── Tabla de Historial ── */}
       <div className="table-wrapper">
         <table className="data-table">
           <thead>
@@ -255,6 +340,7 @@ export default function VentasHistorialTable({
               const cantArticulos = v.ventas_detalle?.reduce((acc, d) => acc + d.cantidad, 0) || 0;
               const esCancelado = v.estado_pago === 'cancelado';
               const esPend = v.estado_pago === 'pendiente';
+              const tieneNota = Boolean(v.observaciones && v.observaciones.trim());
 
               return (
                 <tr key={v.id_venta} style={{ opacity: esCancelado ? 0.6 : 1 }}>
@@ -264,7 +350,38 @@ export default function VentasHistorialTable({
                   </td>
                   <td className="td-muted">{v.perfiles?.nombre_completo || 'Operador'}</td>
                   <td className="td-nombre">
-                    {v.clientes?.nombre_razon_social || 'Consumidor Final'}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                      <span>{v.clientes?.nombre_razon_social || 'Consumidor Final'}</span>
+                      {/* Pill interactivo de Observación */}
+                      {tieneNota && (
+                        <button
+                          type="button"
+                          onClick={() => setNotaActiva({
+                            id_venta: v.id_venta,
+                            cliente: v.clientes?.nombre_razon_social || 'Consumidor Final',
+                            fecha: `${fechaStr} ${horaStr} hs`,
+                            texto: v.observaciones
+                          })}
+                          style={{
+                            background: 'var(--color-accent-soft)',
+                            border: '1px solid rgba(201, 162, 39, 0.4)',
+                            color: 'var(--color-accent)',
+                            borderRadius: '4px',
+                            padding: '1px 6px',
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            width: 'fit-content'
+                          }}
+                          title="Clic para ver observación completa"
+                        >
+                          <FileText size={10} /> Nota
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="td-muted">
                     {v.ventas_detalle?.length > 0 
@@ -274,7 +391,7 @@ export default function VentasHistorialTable({
                   </td>
                   <td>
                     <span className="id-badge" style={{ textTransform: 'capitalize' }}>
-                      {v.metodo_pago || 'Efectivo'}
+                      {v.metodo_pago === 'mixto' ? 'Mixto' : (v.metodo_pago || 'Efectivo')}
                     </span>
                   </td>
                   <td>
@@ -285,6 +402,10 @@ export default function VentasHistorialTable({
                     ) : esPend ? (
                       <span className="estado-badge" style={{ background: 'var(--color-warning-soft)', color: '#FBBF24', border: '1px solid rgba(201, 138, 39, 0.4)' }}>
                         Pendiente {v.fecha_vencimiento ? `(${v.fecha_vencimiento.slice(5)})` : ''}
+                      </span>
+                    ) : v.estado_pago === 'parcial' ? (
+                      <span className="estado-badge" style={{ background: 'rgba(42, 90, 150, 0.2)', color: '#6EA8FE', border: '1px solid rgba(42, 90, 150, 0.4)' }}>
+                        Cobro Parcial
                       </span>
                     ) : (
                       <span className="estado-badge activo">Cobrado</span>
