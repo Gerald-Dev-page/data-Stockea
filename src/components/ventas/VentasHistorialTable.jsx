@@ -1,6 +1,6 @@
 // src/components/ventas/VentasHistorialTable.jsx
 import { useState } from 'react';
-import { Clock, ChevronLeft, ChevronRight, Ban, Search, RotateCcw, FileText, X } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, Ban, Search, RotateCcw, FileText, X, Eye } from 'lucide-react';
 
 const formatPrice = (n) =>
   Number(n || 0).toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -30,6 +30,7 @@ export default function VentasHistorialTable({
   saving
 }) {
   const [notaActiva, setNotaActiva] = useState(null);
+  const [ticketSeleccionado, setTicketSeleccionado] = useState(null);
   const hayFiltrosActivos = busqueda || filtroCliente !== 'todos' || filtroEstado !== 'todos' || fechaDesde || fechaHasta;
 
   return (
@@ -105,6 +106,118 @@ export default function VentasHistorialTable({
                   padding: '6px 14px',
                   borderRadius: 'var(--radius-sm)',
                   fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: DETALLE COMPLETO DEL TICKET ── */}
+      {ticketSeleccionado && (
+        <div 
+          onClick={() => setTicketSeleccionado(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(3, 8, 15, 0.8)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem'
+          }}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="form-card" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '550px', 
+              maxHeight: '90vh', 
+              overflowY: 'auto', 
+              border: '1px solid rgba(201, 162, 39, 0.4)', 
+              boxShadow: 'var(--shadow-md)',
+              background: 'linear-gradient(180deg, #09121D 0%, #0c1827 100%)',
+              padding: '1.5rem'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.75rem' }}>
+              <div>
+                <h3 className="form-title" style={{ margin: 0 }}>Detalle del Comprobante</h3>
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Ticket ID: {ticketSeleccionado.id_venta}</span>
+              </div>
+              <button onClick={() => setTicketSeleccionado(null)} style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '1rem', fontSize: '0.82rem', background: 'var(--color-bg-main)', padding: '10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block' }}>Cliente:</span>
+                <strong>{ticketSeleccionado.clientes?.nombre_razon_social || 'Consumidor Final'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block' }}>Operador:</span>
+                <strong>{ticketSeleccionado.perfiles?.nombre_completo || 'Operador'}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block' }}>Fecha y Hora:</span>
+                <strong>{new Date(ticketSeleccionado.creado_en).toLocaleString('es-AR')}</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block' }}>Medio de Pago:</span>
+                <strong style={{ textTransform: 'capitalize' }}>{ticketSeleccionado.metodo_pago === 'mixto' ? 'Mixto' : (ticketSeleccionado.metodo_pago || 'Efectivo')}</strong>
+              </div>
+            </div>
+
+            <h4 style={{ fontSize: '0.85rem', color: 'var(--color-accent)', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Artículos Adquiridos
+            </h4>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '1.25rem', maxHeight: '220px', overflowY: 'auto' }}>
+              {ticketSeleccionado.ventas_detalle?.map((det, index) => {
+                const subtotalItem = Number(det.cantidad || 0) * Number(det.precio_historico || 0);
+                return (
+                  <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-bg-card)', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: '0.82rem' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: 'var(--color-text-heading)' }}>{det.productos?.nombre || 'Artículo'}</div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)' }}>{det.cantidad} u. × {formatPrice(det.precio_historico)}</div>
+                    </div>
+                    <strong style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-heading)' }}>{formatPrice(subtotalItem)}</strong>
+                  </div>
+                );
+              })}
+            </div>
+
+            {ticketSeleccionado.observaciones && (
+              <div style={{ fontSize: '0.78rem', background: 'var(--color-bg-main)', padding: '8px 10px', borderRadius: 'var(--radius-sm)', marginBottom: '1rem', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', fontWeight: 600, marginBottom: '2px' }}>Observaciones:</span>
+                {ticketSeleccionado.observaciones}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--color-bg-main)', padding: '1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', marginBottom: '1.25rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Total Facturado</span>
+              <strong style={{ fontSize: '1.35rem', color: 'var(--color-accent)', fontVariantNumeric: 'tabular-nums' }}>
+                {formatPrice(ticketSeleccionado.total)}
+              </strong>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button 
+                type="button" 
+                onClick={() => setTicketSeleccionado(null)} 
+                style={{
+                  background: 'var(--color-accent)',
+                  border: 'none',
+                  color: '#FFF',
+                  padding: '8px 18px',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.8rem',
                   fontWeight: 600,
                   cursor: 'pointer'
                 }}
@@ -352,7 +465,6 @@ export default function VentasHistorialTable({
                   <td className="td-nombre">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                       <span>{v.clientes?.nombre_razon_social || 'Consumidor Final'}</span>
-                      {/* Pill interactivo de Observación */}
                       {tieneNota && (
                         <button
                           type="button"
@@ -384,10 +496,32 @@ export default function VentasHistorialTable({
                     </div>
                   </td>
                   <td className="td-muted">
-                    {v.ventas_detalle?.length > 0 
-                      ? `${v.ventas_detalle[0].productos?.nombre || 'Producto'} ${v.ventas_detalle.length > 1 ? `(+${v.ventas_detalle.length - 1})` : ''} (${cantArticulos} u.)`
-                      : '—'
-                    }
+                    <button
+                      type="button"
+                      onClick={() => setTicketSeleccionado(v)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: 'var(--color-text-heading)', 
+                        cursor: 'pointer', 
+                        padding: 0, 
+                        textAlign: 'left', 
+                        fontWeight: 600, 
+                        fontSize: '0.82rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '4px' 
+                      }}
+                      title="Clic para ver detalle completo de artículos"
+                    >
+                      <span style={{ color: 'var(--color-accent)' }}>
+                        {v.ventas_detalle?.length > 0 
+                          ? `${v.ventas_detalle[0].productos?.nombre || 'Producto'} ${v.ventas_detalle.length > 1 ? `(+${v.ventas_detalle.length - 1})` : ''}`
+                          : '—'
+                        }
+                      </span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>({cantArticulos} u.)</span>
+                    </button>
                   </td>
                   <td>
                     <span className="id-badge" style={{ textTransform: 'capitalize' }}>
@@ -415,28 +549,50 @@ export default function VentasHistorialTable({
                     {formatPrice(v.total)}
                   </td>
                   <td>
-                    {!esCancelado && (
+                    <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         type="button"
-                        onClick={() => onCancelarVenta(v.id_venta)}
-                        disabled={saving}
+                        onClick={() => setTicketSeleccionado(v)}
                         style={{
                           background: 'transparent',
-                          border: '1px solid rgba(179, 64, 42, 0.3)',
-                          color: '#F87171',
+                          border: '1px solid var(--color-border)',
                           borderRadius: 'var(--radius-sm)',
                           padding: '4px 8px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '4px',
+                          color: 'var(--color-text-muted)',
                           fontSize: '0.72rem'
                         }}
-                        title="Anular venta y reponer stock"
+                        title="Ver detalle completo"
                       >
-                        <Ban size={12} /> Anular
+                        <Eye size={12} /> Detalle
                       </button>
-                    )}
+
+                      {!esCancelado && (
+                        <button
+                          type="button"
+                          onClick={() => onCancelarVenta(v.id_venta)}
+                          disabled={saving}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(179, 64, 42, 0.3)',
+                            color: '#F87171',
+                            borderRadius: 'var(--radius-sm)',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.72rem'
+                          }}
+                          title="Anular venta y reponer stock"
+                        >
+                          <Ban size={12} /> Anular
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

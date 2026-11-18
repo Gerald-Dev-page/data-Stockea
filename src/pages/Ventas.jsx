@@ -49,7 +49,17 @@ export default function Ventas() {
     setFiltroFechaHasta,
     limpiarFiltros,
     totalDia,
+    subtotalCarrito,
     totalFactura,
+    montoInteres,
+    observaciones,
+    setObservaciones,
+    pagoMixto,
+    setPagoMixto,
+    interesPorcentaje,
+    setInteresPorcentaje,
+    descuentoPorcentaje,
+    setDescuentoPorcentaje,
     handleProductoChange,
     handleTipoPrecioChange,
     handleAgregarAlCarrito,
@@ -59,15 +69,7 @@ export default function Ventas() {
     handleConfirmarVenta,
     cancelarVenta,
     reservasCliente,
-    subtotalCarrito,
-  montoInteres,
-  observaciones,
-  setObservaciones,
-  pagoMixto,
-  setPagoMixto,
-  interesPorcentaje,
-  setInteresPorcentaje,
-  handleCargarReservaAlTicket
+    handleCargarReservaAlTicket
   } = useVentas();
 
   const [ventaParaAnular, setVentaParaAnular] = useState(null);
@@ -107,7 +109,7 @@ export default function Ventas() {
         </div>
       )}
 
-      {/* ── Layout en 2 Columnas de tu CSS original (.ventas-layout-grid) ── */}
+      {/* ── Layout en 2 Columnas ── */}
       <div className="ventas-layout-grid" style={{ marginBottom: '2rem' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <VentasClienteCard
@@ -124,34 +126,37 @@ export default function Ventas() {
             onTipoPrecioChange={handleTipoPrecioChange}
             setItemActual={setItemActual}
             onAgregar={handleAgregarAlCarrito}
+            saving={saving}
           />
         </div>
 
         <div>
           <VentasTicketCard
-  carrito={carrito}
-  subtotalCarrito={subtotalCarrito}
-  totalFactura={totalFactura}
-  montoInteres={montoInteres}
-  metodoPago={metodoPago}
-  onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
-  esPendiente={esPendiente}
-  setEsPendiente={setEsPendiente}
-  fechaVencimiento={fechaVencimiento}
-  setFechaVencimiento={setFechaVencimiento}
-  observaciones={observaciones}
-  setObservaciones={setObservaciones}
-  pagoMixto={pagoMixto}
-  setPagoMixto={setPagoMixto}
-  interesPorcentaje={interesPorcentaje}
-  setInteresPorcentaje={setInteresPorcentaje}
-  onEliminarItem={handleEliminarItemCarrito}
-  onConfirmar={handleConfirmarVenta}
-  disabledSubmit={saving || carrito.length === 0 || !clienteId}
-  saving={saving}
-  reservasCliente={reservasCliente}
-  onCargarReserva={handleCargarReservaAlTicket}
-/>
+            carrito={carrito}
+            subtotalCarrito={subtotalCarrito}
+            totalFactura={totalFactura}
+            montoInteres={montoInteres}
+            descuentoPorcentaje={descuentoPorcentaje}
+            setDescuentoPorcentaje={setDescuentoPorcentaje}
+            metodoPago={metodoPago}
+            onSeleccionarMetodoPago={handleSeleccionarMetodoPago}
+            esPendiente={esPendiente}
+            setEsPendiente={setEsPendiente}
+            fechaVencimiento={fechaVencimiento}
+            setFechaVencimiento={setFechaVencimiento}
+            observaciones={observaciones}
+            setObservaciones={setObservaciones}
+            pagoMixto={pagoMixto}
+            setPagoMixto={setPagoMixto}
+            interesPorcentaje={interesPorcentaje}
+            setInteresPorcentaje={setInteresPorcentaje}
+            onEliminarItem={handleEliminarItemCarrito}
+            onConfirmar={handleConfirmarVenta}
+            disabledSubmit={saving || carrito.length === 0 || !clienteId}
+            saving={saving}
+            reservasCliente={reservasCliente}
+            onCargarReserva={handleCargarReservaAlTicket}
+          />
         </div>
       </div>
 
@@ -184,7 +189,6 @@ export default function Ventas() {
         saving={saving}
       />
 
-      {/* Modal de Anulación corporativo */}
       <ModalConfirmarAnulacion
         venta={ventaParaAnular}
         onClose={() => setVentaParaAnular(null)}

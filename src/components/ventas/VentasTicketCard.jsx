@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { 
   ShoppingCart, Banknote, Landmark, CreditCard, 
   Calendar, CheckCircle2, Trash2, BookmarkCheck, 
-  Layers, FileText, Percent 
+  Layers, FileText, Percent, Tag 
 } from 'lucide-react';
 
 const formatPrice = (n) =>
@@ -14,6 +14,8 @@ export default function VentasTicketCard({
   subtotalCarrito,
   totalFactura,
   montoInteres,
+  descuentoPorcentaje,
+  setDescuentoPorcentaje,
   metodoPago,
   onSeleccionarMetodoPago,
   esPendiente,
@@ -37,12 +39,15 @@ export default function VentasTicketCard({
 
   const tieneFinanciacion = metodoPago === 'cuenta_corriente' || esPendiente || (metodoPago === 'mixto' && Number(pagoMixto.cta_cte || 0) > 0);
 
+  const pctDesc = parseFloat(descuentoPorcentaje) || 0;
+  const montoDescuento = Math.round((subtotalCarrito * pctDesc) / 100);
+  const subtotalNeto = Math.max(0, subtotalCarrito - montoDescuento);
+
   const sumaMixta = (Number(pagoMixto.efectivo) || 0) + (Number(pagoMixto.transferencia) || 0) + (Number(pagoMixto.cta_cte) || 0);
-  const diferenciaMixta = (subtotalCarrito || 0) - sumaMixta;
+  const diferenciaMixta = subtotalNeto - sumaMixta;
 
   return (
     <div className="form-card" style={{ border: '1px solid rgba(201, 162, 39, 0.3)' }}>
-      {/* ── Cabecera ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h3 className="form-title" style={{ margin: 0 }}>
           <ShoppingCart size={16} style={{ color: 'var(--color-accent)' }} /> Resumen del Ticket
@@ -52,15 +57,9 @@ export default function VentasTicketCard({
         </span>
       </div>
 
-      {/* ── Mercadería Reservada ── */}
+      {/* Reservas de cliente */}
       {reservasCliente.length > 0 && (
-        <div style={{ 
-          marginBottom: '1rem', 
-          background: 'var(--color-accent-soft)', 
-          border: '1px solid var(--color-accent)', 
-          borderRadius: 'var(--radius-sm)', 
-          padding: '8px 12px' 
-        }}>
+        <div style={{ marginBottom: '1rem', background: 'var(--color-accent-soft)', border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)', padding: '8px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', color: 'var(--color-accent)', fontSize: '0.78rem', fontWeight: 700 }}>
             <BookmarkCheck size={15} />
             <span>Mercadería reservada por este cliente:</span>
@@ -68,35 +67,12 @@ export default function VentasTicketCard({
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {reservasCliente.map(res => (
-              <div 
-                key={res.id_reserva} 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  fontSize: '0.76rem', 
-                  background: 'var(--color-bg-card)', 
-                  padding: '4px 8px', 
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--color-border)'
-                }}
-              >
-                <span>
-                  <strong>{res.cantidad} u.</strong> {res.productos?.nombre || 'Artículo'}
-                </span>
+              <div key={res.id_reserva} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.76rem', background: 'var(--color-bg-card)', padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
+                <span><strong>{res.cantidad} u.</strong> {res.productos?.nombre || 'Artículo'}</span>
                 <button
                   type="button"
                   onClick={() => onCargarReserva && onCargarReserva(res)}
-                  style={{
-                    background: 'var(--color-accent)',
-                    border: 'none',
-                    color: '#FFF',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '2px 8px',
-                    fontSize: '0.7rem',
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
+                  style={{ background: 'var(--color-accent)', border: 'none', color: '#FFF', borderRadius: 'var(--radius-sm)', padding: '2px 8px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' }}
                 >
                   + Cargar al ticket
                 </button>
@@ -106,10 +82,10 @@ export default function VentasTicketCard({
         </div>
       )}
 
-      {/* ── Carrito ── */}
-      <div style={{ maxHeight: '190px', overflowY: 'auto', marginBottom: '1rem' }}>
+      {/* Carrito */}
+      <div style={{ maxHeight: '180px', overflowY: 'auto', marginBottom: '1rem' }}>
         {carrito.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+          <div style={{ textAlign: 'center', padding: '1.75rem 1rem', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
             El carrito está vacío. Agregue productos desde el panel izquierdo.
           </div>
         ) : (
@@ -149,7 +125,56 @@ export default function VentasTicketCard({
         )}
       </div>
 
-      {/* ── Medios de Cobro (Grid Clásico de 3) + Toggle Mixto Elegante ── */}
+      {/* Subtotal y Descuento por Porcentaje (%) con diseño acorde */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>
+          <span>Subtotal:</span>
+          <span>{formatPrice(subtotalCarrito)}</span>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.84rem', color: 'var(--color-text-heading)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Tag size={13} style={{ color: 'var(--color-accent)' }} /> Descuento (%):
+          </span>
+          <input 
+            type="number"
+            min="0"
+            max="100"
+            step="0.5"
+            placeholder="0 %"
+            value={descuentoPorcentaje}
+            onChange={(e) => setDescuentoPorcentaje(e.target.value)}
+            style={{ 
+              width: '90px', 
+              height: '32px', 
+              textAlign: 'right', 
+              fontSize: '0.85rem', 
+              background: 'var(--color-bg-main)',
+              color: 'var(--color-text-heading)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '2px 8px',
+              outline: 'none'
+            }}
+          />
+        </div>
+
+        {montoDescuento > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#5EDBA2' }}>
+            <span>Descuento aplicado ({pctDesc}%):</span>
+            <span>-{formatPrice(montoDescuento)}</span>
+          </div>
+        )}
+
+        {montoInteres > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: 'var(--color-accent)' }}>
+            <span>Recargo Financiero:</span>
+            <span>+{formatPrice(montoInteres)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Medios de Cobro */}
       <div className="form-group" style={{ marginBottom: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
           <label style={{ margin: 0 }}>Medio de Cobro</label>
@@ -167,15 +192,13 @@ export default function VentasTicketCard({
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '4px',
-              transition: 'var(--transition)'
+              gap: '4px'
             }}
           >
             <Layers size={12} /> {metodoPago === 'mixto' ? 'Pago Mixto Activo' : 'Dividir Pago'}
           </button>
         </div>
 
-        {/* Los 3 botones clásicos impecables */}
         <div className="metodos-pago-grid">
           <button
             type="button"
@@ -201,15 +224,9 @@ export default function VentasTicketCard({
         </div>
       </div>
 
-      {/* ── Desglose de Pago Mixto con los estilos Dark Navy del Sistema ── */}
+      {/* Pago mixto */}
       {metodoPago === 'mixto' && (
-        <div style={{ 
-          background: 'linear-gradient(180deg, #09121D 0%, #0c1827 100%)', 
-          border: '1px solid rgba(201, 162, 39, 0.35)', 
-          borderRadius: 'var(--radius-sm)', 
-          padding: '12px', 
-          marginBottom: '1rem' 
-        }}>
+        <div style={{ background: 'linear-gradient(180deg, #09121D 0%, #0c1827 100%)', border: '1px solid rgba(201, 162, 39, 0.35)', borderRadius: 'var(--radius-sm)', padding: '12px', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Distribución de Montos
@@ -223,74 +240,36 @@ export default function VentasTicketCard({
             <div>
               <label style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', marginBottom: '3px', display: 'block' }}>Efectivo</label>
               <input 
-                type="number"
-                min="0"
-                value={pagoMixto.efectivo}
-                placeholder="$ 0"
+                type="number" min="0" value={pagoMixto.efectivo} placeholder="$ 0"
                 onChange={(e) => setPagoMixto(prev => ({ ...prev, efectivo: e.target.value }))}
-                style={{ 
-                  background: 'var(--color-bg-card)', 
-                  border: '1px solid var(--color-border)', 
-                  color: 'var(--color-text-heading)', 
-                  padding: '7px 9px', 
-                  fontSize: '0.8rem', 
-                  borderRadius: 'var(--radius-sm)',
-                  width: '100%',
-                  fontVariantNumeric: 'tabular-nums'
-                }}
+                style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-heading)', padding: '7px 9px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)', width: '100%' }}
               />
             </div>
             <div>
               <label style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', marginBottom: '3px', display: 'block' }}>Transferencia</label>
               <input 
-                type="number"
-                min="0"
-                value={pagoMixto.transferencia}
-                placeholder="$ 0"
+                type="number" min="0" value={pagoMixto.transferencia} placeholder="$ 0"
                 onChange={(e) => setPagoMixto(prev => ({ ...prev, transferencia: e.target.value }))}
-                style={{ 
-                  background: 'var(--color-bg-card)', 
-                  border: '1px solid var(--color-border)', 
-                  color: 'var(--color-text-heading)', 
-                  padding: '7px 9px', 
-                  fontSize: '0.8rem', 
-                  borderRadius: 'var(--radius-sm)',
-                  width: '100%',
-                  fontVariantNumeric: 'tabular-nums'
-                }}
+                style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-heading)', padding: '7px 9px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)', width: '100%' }}
               />
             </div>
             <div>
               <label style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', marginBottom: '3px', display: 'block' }}>Cta. Cte.</label>
               <input 
-                type="number"
-                min="0"
-                value={pagoMixto.cta_cte}
-                placeholder="$ 0"
+                type="number" min="0" value={pagoMixto.cta_cte} placeholder="$ 0"
                 onChange={(e) => setPagoMixto(prev => ({ ...prev, cta_cte: e.target.value }))}
-                style={{ 
-                  background: 'var(--color-bg-card)', 
-                  border: '1px solid var(--color-border)', 
-                  color: 'var(--color-text-heading)', 
-                  padding: '7px 9px', 
-                  fontSize: '0.8rem', 
-                  borderRadius: 'var(--radius-sm)',
-                  width: '100%',
-                  fontVariantNumeric: 'tabular-nums'
-                }}
+                style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-heading)', padding: '7px 9px', fontSize: '0.8rem', borderRadius: 'var(--radius-sm)', width: '100%' }}
               />
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Panel de Venta Pendiente / Cta Cte / Financiación ── */}
+      {/* Venta pendiente */}
       {metodoPago !== 'mixto' && (
         <div className={`pendiente-panel ${esPendiente ? 'is-active' : ''}`} style={{ marginBottom: '1rem' }}>
           <div className="pendiente-toggle-row" onClick={() => setEsPendiente(!esPendiente)}>
-            <span className="pendiente-toggle-label">
-              Dejar como Venta Pendiente (Deuda)
-            </span>
+            <span className="pendiente-toggle-label">Dejar como Venta Pendiente (Deuda)</span>
             <div className={`custom-switch ${esPendiente ? 'checked' : ''}`}>
               <div className="custom-switch-thumb" />
             </div>
@@ -298,79 +277,42 @@ export default function VentasTicketCard({
         </div>
       )}
 
-      {/* ── Interés y Fecha Límite (solo si hay Cta. Cte. o saldo pendiente) ── */}
+      {/* Interés y vencimiento */}
       {tieneFinanciacion && (
-        <div style={{ 
-          background: 'var(--color-bg-main)', 
-          border: '1px solid var(--color-border)', 
-          borderRadius: 'var(--radius-sm)', 
-          padding: '10px 12px', 
-          marginBottom: '1rem' 
-        }}>
+        <div style={{ background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', marginBottom: '1rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '10px' }}>
             <div>
               <label style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-text-muted)', marginBottom: '3px' }}>
                 <Calendar size={13} style={{ color: 'var(--color-accent)' }} /> Vencimiento
               </label>
               <input 
-                type="date" 
-                className="custom-date-input"
-                value={fechaVencimiento} 
-                onChange={(e) => setFechaVencimiento(e.target.value)}
-                required
+                type="date" className="custom-date-input" value={fechaVencimiento} 
+                onChange={(e) => setFechaVencimiento(e.target.value)} required
                 style={{ height: '34px', fontSize: '0.78rem' }}
               />
             </div>
             <div>
               <label style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--color-text-muted)', marginBottom: '3px' }}>
-                <Percent size={13} style={{ color: 'var(--color-accent)' }} /> % Interés / Recargo
+                <Percent size={13} style={{ color: 'var(--color-accent)' }} /> % Interés
               </label>
               <input 
-                type="number"
-                min="0"
-                step="0.5"
-                value={interesPorcentaje || ''}
+                type="number" min="0" step="0.5" value={interesPorcentaje || ''}
                 onChange={(e) => setInteresPorcentaje(e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value)))}
                 placeholder="0 %"
-                style={{ 
-                  height: '34px', 
-                  fontSize: '0.8rem', 
-                  padding: '6px 9px', 
-                  background: 'var(--color-bg-card)', 
-                  border: '1px solid var(--color-border)', 
-                  color: 'var(--color-text-heading)',
-                  borderRadius: 'var(--radius-sm)',
-                  width: '100%'
-                }}
+                style={{ height: '34px', fontSize: '0.8rem', padding: '6px 9px', background: 'var(--color-bg-card)', border: '1px solid var(--color-border)', color: 'var(--color-text-heading)', borderRadius: 'var(--radius-sm)', width: '100%' }}
               />
             </div>
           </div>
-
-          {montoInteres > 0 && (
-            <div style={{ marginTop: '6px', fontSize: '0.72rem', color: 'var(--color-accent)', textAlign: 'right' }}>
-              + Recargo financiero: <strong>{formatPrice(montoInteres)}</strong>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── Observaciones (Discretas y Plegables) ── */}
+      {/* Observaciones */}
       <div style={{ marginBottom: '1.25rem' }}>
         {!mostrarNotas ? (
           <button
             type="button"
             onClick={() => setMostrarNotas(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text-muted)',
-              fontSize: '0.74rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              cursor: 'pointer',
-              padding: 0
-            }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: '0.74rem', display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer', padding: 0 }}
           >
             <FileText size={13} style={{ color: 'var(--color-accent)' }} /> + Añadir observación a esta venta
           </button>
@@ -382,48 +324,26 @@ export default function VentasTicketCard({
               </label>
               <button
                 type="button"
-                onClick={() => {
-                  setMostrarNotas(false);
-                  setObservaciones('');
-                }}
+                onClick={() => { setMostrarNotas(false); setObservaciones(''); }}
                 style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: '0.68rem', cursor: 'pointer' }}
               >
                 Ocultar
               </button>
             </div>
             <textarea 
-              rows={2}
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-              placeholder="Ej: Retira el viernes / Seña acordada..."
-              style={{
-                width: '100%',
-                background: 'var(--color-bg-main)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--color-text-heading)',
-                padding: '7px 9px',
-                fontSize: '0.78rem',
-                resize: 'none',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
+              rows={2} value={observaciones} onChange={(e) => setObservaciones(e.target.value)}
+              placeholder="Ej: Retira el viernes..."
+              style={{ width: '100%', background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text-heading)', padding: '7px 9px', fontSize: '0.78rem', resize: 'none', outline: 'none', boxSizing: 'border-box' }}
             />
           </div>
         )}
       </div>
 
-      {/* ── Total a Facturar ── */}
-      <div style={{ 
-        background: 'var(--color-bg-main)', 
-        border: '1px solid var(--color-border)', 
-        borderRadius: 'var(--radius-sm)', 
-        padding: '1rem', 
-        marginBottom: '1.25rem' 
-      }}>
+      {/* Total a cobrar */}
+      <div style={{ background: 'var(--color-bg-main)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '1rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Total a Facturar
+            Total a Cobrar
           </span>
           <strong style={{ fontSize: '1.5rem', color: 'var(--color-accent)', fontVariantNumeric: 'tabular-nums' }}>
             {formatPrice(totalFactura)}

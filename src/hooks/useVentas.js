@@ -14,13 +14,12 @@ export function useVentas() {
   const [showToast, setShowToast] = useState(false);
   const [userId, setUserId] = useState(null);
 
-  // Estados del POS
   const [clienteId, setClienteId] = useState('');
   const [carrito, setCarrito] = useState([]);
   const [reservasCliente, setReservasCliente] = useState([]);
   const [cargandoReservas, setCargandoReservas] = useState(false);
 
-  const [metodoPago, setMetodoPago] = useState('efectivo'); // 'efectivo', 'transferencia', 'cuenta_corriente', 'mixto'
+  const [metodoPago, setMetodoPago] = useState('efectivo');
   const [esPendiente, setEsPendiente] = useState(false);
   const [fechaVencimiento, setFechaVencimiento] = useState(() => {
     const d = new Date();
@@ -28,14 +27,10 @@ export function useVentas() {
     return d.toISOString().split('T')[0];
   });
 
-  // ── Nuevos Campos de Operatoria Comercial ──
   const [observaciones, setObservaciones] = useState('');
-  const [pagoMixto, setPagoMixto] = useState({
-    efectivo: '',
-    transferencia: '',
-    cta_cte: ''
-  });
+  const [pagoMixto, setPagoMixto] = useState({ efectivo: '', transferencia: '', cta_cte: '' });
   const [interesPorcentaje, setInteresPorcentaje] = useState(0);
+  const [descuentoPorcentaje, setDescuentoPorcentaje] = useState('');
 
   const [itemActual, setItemActual] = useState({
     id_producto: '',
@@ -44,7 +39,6 @@ export function useVentas() {
     precio_unitario: 0
   });
 
-  // Filtros del historial
   const [busquedaHistorial, setBusquedaHistorial] = useState('');
   const [filtroCliente, setFiltroCliente] = useState('todos');
   const [filtroEstadoPago, setFiltroEstadoPago] = useState('todos');
@@ -66,7 +60,7 @@ export function useVentas() {
 
         supabase
           .from('productos')
-          .select('id_producto, sku, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, stock_reservado, activo, categorias(nombre)')
+          .select('id_producto, sku, codigo_barras, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, stock_reservado, activo, categorias(nombre)')
           .eq('activo', true)
           .order('nombre', { ascending: true }),
 
@@ -88,6 +82,7 @@ export function useVentas() {
             perfiles ( nombre_completo ),
             ventas_detalle (
               cantidad,
+              precio_historico,
               productos ( nombre )
             )
           `)
@@ -285,17 +280,20 @@ export function useVentas() {
   };
 
   const subtotalCarrito = carrito.reduce((acc, i) => acc + i.total, 0);
+  
+  const pctDesc = parseFloat(descuentoPorcentaje) || 0;
+  const montoDescuento = Math.round((subtotalCarrito * pctDesc) / 100);
+  const subtotalNeto = Math.max(0, subtotalCarrito - montoDescuento);
 
-  // Cálculo de importe a financiar y recargo por interés
   const montoAFinanciarBase = useMemo(() => {
     if (metodoPago === 'cuenta_corriente' || esPendiente) {
-      return subtotalCarrito;
+      return subtotalNeto;
     }
     if (metodoPago === 'mixto') {
       return Number(pagoMixto.cta_cte || 0);
     }
     return 0;
-  }, [metodoPago, esPendiente, subtotalCarrito, pagoMixto.cta_cte]);
+  }, [metodoPago, esPendiente, subtotalNeto, pagoMixto.cta_cte]);
 
   const montoInteres = useMemo(() => {
     const pct = Number(interesPorcentaje || 0);
@@ -303,7 +301,7 @@ export function useVentas() {
     return Math.round((montoAFinanciarBase * pct) / 100);
   }, [montoAFinanciarBase, interesPorcentaje]);
 
-  const totalFactura = subtotalCarrito + montoInteres;
+  const totalFactura = Math.max(0, subtotalNeto + montoInteres);
 
   const handleConfirmarVenta = async () => {
     if (!clienteId) {
@@ -319,7 +317,6 @@ export function useVentas() {
       return;
     }
 
-    // Validaciones de Pago Mixto
     let montoEfectivo = 0;
     let montoTransf = 0;
     let montoCtaCte = 0;
@@ -330,8 +327,8 @@ export function useVentas() {
       montoCtaCte = Number(pagoMixto.cta_cte || 0);
 
       const sumaIngresadaBase = montoEfectivo + montoTransf + montoCtaCte;
-      if (Math.abs(sumaIngresadaBase - subtotalCarrito) > 1) {
-        setError(`En pago combinado, la suma ($${sumaIngresadaBase}) debe coincidir con el total ($${subtotalCarrito}).`);
+      if (Math.abs(sumaIngresadaBase - subtotalNeto) > 1) {
+        setError(`En pago combinado, la suma ($${sumaIngresadaBase}) debe coincidir con el subtotal neto ($${subtotalNeto}).`);
         return;
       }
     }
@@ -353,7 +350,6 @@ export function useVentas() {
         ? 'pendiente' 
         : (metodoPago === 'mixto' && montoCtaCte > 0) ? 'parcial' : 'pagado';
 
-      // 1. Insertar venta
       const { data: ventaReq, error: errVenta } = await supabase
         .from('ventas')
         .insert([{
@@ -377,7 +373,6 @@ export function useVentas() {
 
       if (errVenta) throw errVenta;
 
-      // 2. Insertar detalles
       const detallesInsert = carrito.map(item => ({
         venta_id: ventaReq.id_venta,
         producto_id: item.id_producto,
@@ -388,7 +383,6 @@ export function useVentas() {
       const { error: errDetalles } = await supabase.from('ventas_detalle').insert(detallesInsert);
       if (errDetalles) throw errDetalles;
 
-      // 3. Descontar stock físico y de reservas
       for (const item of carrito) {
         const prod = catalogo.find(p => String(p.id_producto) === String(item.id_producto));
         const nuevoFisico = (prod?.stock_actual || 0) - item.cantidad;
@@ -416,7 +410,6 @@ export function useVentas() {
         }]);
       }
 
-      // 4. Actualizar saldo del cliente según la parte financiada + interés
       if (tieneDeuda && clienteSeleccionado) {
         const saldoPrevio = Number(clienteSeleccionado.saldo_deudor || 0);
         const montoDeudaASumar = metodoPago === 'mixto' 
@@ -429,7 +422,6 @@ export function useVentas() {
           .eq('id_cliente', clienteId);
       }
 
-      // Limpiar formulario
       setCarrito([]);
       setClienteId('');
       setReservasCliente([]);
@@ -438,6 +430,7 @@ export function useVentas() {
       setObservaciones('');
       setPagoMixto({ efectivo: '', transferencia: '', cta_cte: '' });
       setInteresPorcentaje(0);
+      setDescuentoPorcentaje('');
 
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3500);
@@ -493,7 +486,6 @@ export function useVentas() {
           }]);
       }
 
-      // Restituir deuda del cliente según el tipo de venta
       if (ventaTarget.cliente_id) {
         let montoARestar = 0;
         if (ventaTarget.estado_pago === 'pendiente') {
@@ -624,6 +616,8 @@ export function useVentas() {
     setPagoMixto,
     interesPorcentaje,
     setInteresPorcentaje,
+    descuentoPorcentaje,
+    setDescuentoPorcentaje,
     montoAFinanciarBase,
     montoInteres,
     subtotalCarrito,
