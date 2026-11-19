@@ -60,7 +60,7 @@ export function useProducts() {
       setError(null);
       const [catRes, prodRes] = await Promise.all([
         supabase.from('categorias').select('*').order('nombre', { ascending: true }),
-        supabase.from('productos').select('*, categorias(nombre)').order('nombre', { ascending: true })
+        supabase.from('productos').select('*, categorias!productos_categoria_id_fkey(nombre)').order('nombre', { ascending: true })
       ]);
       if (catRes.error) throw catRes.error;
       if (prodRes.error) throw prodRes.error;

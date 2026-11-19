@@ -53,7 +53,7 @@ export function useStock() {
       setError(null);
 
       const [resProds, resMovs, resCli] = await Promise.all([
-        supabase.from('productos').select('*, categorias(nombre)').order('nombre', { ascending: true }),
+        supabase.from('productos').select('*, categorias!productos_categoria_id_fkey(nombre)').order('nombre', { ascending: true }),
         supabase.from('movimientos_stock').select(`
           id_movimiento,
           tipo,

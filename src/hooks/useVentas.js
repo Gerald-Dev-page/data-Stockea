@@ -60,7 +60,7 @@ export function useVentas() {
 
         supabase
           .from('productos')
-          .select('id_producto, sku, codigo_barras, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, stock_reservado, activo, categorias(nombre)')
+          .select('id_producto, sku, codigo_barras, nombre, precio_venta, precio_mayorista, precio_mayorista_1, precio_mayorista_2, precio_mayorista_3, stock_actual, stock_reservado, activo, categorias!productos_categoria_id_fkey(nombre)')
           .eq('activo', true)
           .order('nombre', { ascending: true }),
 

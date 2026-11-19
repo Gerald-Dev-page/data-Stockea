@@ -73,7 +73,7 @@ export function useDashboard() {
               cantidad,
               productos (
                 nombre,
-                categorias ( nombre )
+                categorias!productos_categoria_id_fkey ( nombre )
               )
             )
           `)
@@ -195,7 +195,6 @@ export function useDashboard() {
         transaccionesValidas += 1;
 
         if (v.metodo_pago === 'mixto' && v.pago_mixto) {
-          // Desglose de pago combinado
           const cobroEfectivo = Number(v.pago_mixto.efectivo || 0);
           const cobroTransf = Number(v.pago_mixto.transferencia || 0);
 
@@ -203,7 +202,6 @@ export function useDashboard() {
           pagos.efectivo += cobroEfectivo;
           pagos.transferencia += cobroTransf;
         } else if (v.estado_pago !== 'pendiente') {
-          // Pago simple al contado (Efectivo o Transferencia)
           cobradoContado += v.total;
           const metodo = v.metodo_pago || 'efectivo';
           pagos[metodo] = (pagos[metodo] || 0) + v.total;
@@ -223,7 +221,6 @@ export function useDashboard() {
       }
     });
 
-    // Pagos de cuotas/deudas ingresados a caja
     pagosDeuda.forEach(p => {
       if (enRango(p.fecha)) {
         cobradoDeudas += p.monto;
