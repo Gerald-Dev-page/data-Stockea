@@ -54,7 +54,7 @@
 
 .filtro-clear:hover {
   background: var(--color-error-soft);
-  color: #F87171;
+  color: var(--color-error-text);
   border-color: rgba(179, 64, 42, 0.4);
 }
 
@@ -72,13 +72,13 @@
   font-variant-numeric: tabular-nums;
 }
 
-.estado-success { color: #5EDBA2; }
-.estado-warning { color: #FBBF24; }
-.estado-error   { color: #F87171; }
+.estado-success { color: var(--color-success-text); }
+.estado-warning { color: var(--color-warning-text); }
+.estado-error   { color: var(--color-error-text); }
 
 .stock-bar-track {
   height: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-chart-track);
   border-radius: var(--radius-pill);
   overflow: hidden;
   width: 100%;
@@ -105,9 +105,9 @@
   white-space: nowrap;
 }
 
-.color-success { background: var(--color-success-soft); color: #5EDBA2; }
-.color-warning { background: var(--color-warning-soft); color: #FBBF24; }
-.color-error   { background: var(--color-error-soft);   color: #F87171; }
+.color-success { background: var(--color-success-soft); color: var(--color-success-text); }
+.color-warning { background: var(--color-warning-soft); color: var(--color-warning-text); }
+.color-error   { background: var(--color-error-soft);   color: var(--color-error-text); }
 
 .btn-reponer {
   display: inline-flex;
@@ -208,14 +208,14 @@
 
 .stock-filter-btn.active-bajo {
   background: var(--color-warning-soft);
-  border-color: #FBBF24;
-  color: #FBBF24;
+  border-color: var(--color-warning-text);
+  color: var(--color-warning-text);
 }
 
 .stock-filter-btn.active-transito {
-  background: rgba(42, 90, 150, 0.18);
-  border-color: #6EA8FE;
-  color: #6EA8FE;
+  background: var(--color-info-soft);
+  border-color: var(--color-info-text);
+  color: var(--color-info-text);
 }
 
 @media (max-width: 768px) {

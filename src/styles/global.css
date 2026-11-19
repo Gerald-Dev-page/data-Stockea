@@ -47,7 +47,88 @@
 
   --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Tokens específicos para elementos antes escritos a mano en otros CSS. */
+  color-scheme: dark;
+  --color-scheme: dark;
+  --color-success-text: #5EDBA2;
+  --color-error-text: #F87171;
+  --color-warning-text: #FBBF24;
+  --color-info-text: #6EA8FE;
+  --color-info-soft: rgba(42, 90, 150, 0.18);
+  --color-table-row-border: rgba(30, 48, 72, 0.4);
+  --color-table-hover: rgba(201, 162, 39, 0.03);
+  --color-neutral-soft: rgba(255, 255, 255, 0.05);
+  --color-chart-track: rgba(255, 255, 255, 0.05);
+  --color-chart-fill: rgba(42, 90, 150, 0.4);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.04);
+  --color-footer-tint: rgba(9, 18, 29, 0.4);
+  --color-highlight-value: #FFFFFF;
+  --color-highlight-sub: rgba(255, 255, 255, 0.65);
+  --gradient-highlight: linear-gradient(135deg, #10243C, #18375C);
+  --shadow-hover: 0 4px 18px rgba(0, 0, 0, 0.35);
+  --shadow-sidebar: 4px 0 24px rgba(0, 0, 0, 0.25);
+  --shadow-mobile-nav: 0 -4px 20px rgba(0, 0, 0, 0.35);
+  --logo-filter: brightness(0) invert(1);
+  --login-gradient-one: rgba(19, 49, 92, 0.25);
+  --login-gradient-two: rgba(201, 162, 39, 0.06);
 }
+
+/* MODO CLARO · Hueso / marfil con detalles cálidos y acento dorado.
+   Solo sobreescribe valores: no duplica los estilos de los componentes. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-scheme: light;
+  --color-primary: #EAE1D3;
+  --color-primary-light: #DCCFBA;
+  --color-primary-bright: #456C8A;
+  --color-accent: #896419;
+  --color-accent-hover: #705015;
+  --color-accent-soft: rgba(153, 111, 35, 0.13);
+  --color-bg-main: #F5F1E8;
+  --color-bg-card: #FFFCF7;
+  --color-bg-hover: #EEE7DC;
+  --color-text-heading: #312D29;
+  --color-text-main: #494239;
+  --color-text-muted: #71665B;
+  --color-border: #DDD4C6;
+  --color-success: #2D7652;
+  --color-success-soft: rgba(38, 120, 83, 0.1);
+  --color-error: #9D3B30;
+  --color-error-soft: rgba(160, 55, 42, 0.1);
+  --color-warning: #996918;
+  --color-warning-soft: rgba(151, 105, 24, 0.12);
+  --gradient-primary: linear-gradient(135deg, #EAE1D3, #F6EFE5);
+  --gradient-accent: linear-gradient(135deg, #D6AD4A, #C39A36);
+  --gradient-card: linear-gradient(180deg, #FFFCF7, #F8F3EB);
+  --shadow-sm: 0 2px 8px rgba(67, 51, 30, 0.07);
+  --shadow-md: 0 10px 24px rgba(67, 51, 30, 0.12);
+  --shadow-glow: 0 0 20px rgba(153, 111, 35, 0.11);
+
+  --color-success-text: #246D4B;
+  --color-error-text: #A3352E;
+  --color-warning-text: #825715;
+  --color-info-text: #335D81;
+  --color-info-soft: rgba(58, 100, 134, 0.11);
+  --color-table-row-border: rgba(116, 98, 76, 0.16);
+  --color-table-hover: rgba(153, 111, 35, 0.06);
+  --color-neutral-soft: rgba(89, 74, 55, 0.06);
+  --color-chart-track: rgba(89, 74, 55, 0.09);
+  --color-chart-fill: rgba(65, 111, 148, 0.55);
+  --color-sidebar-hover: rgba(80, 62, 40, 0.07);
+  --color-footer-tint: rgba(226, 216, 201, 0.28);
+  --color-highlight-value: #312D29;
+  --color-highlight-sub: #665A49;
+  --gradient-highlight: linear-gradient(135deg, #F6EBD5, #EBD6AC);
+  --shadow-hover: 0 4px 18px rgba(67, 51, 30, 0.12);
+  --shadow-sidebar: 4px 0 24px rgba(67, 51, 30, 0.09);
+  --shadow-mobile-nav: 0 -4px 20px rgba(67, 51, 30, 0.10);
+  --logo-filter: brightness(0);
+  --login-gradient-one: rgba(178, 151, 105, 0.13);
+  --login-gradient-two: rgba(196, 158, 87, 0.11);
+}
+
+
 
 /* ── Reset Total ── */
 * {
@@ -119,7 +200,7 @@ body {
 
 .card:hover {
   border-color: rgba(201, 162, 39, 0.25);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-hover);
 }
 
 h2 {
@@ -190,7 +271,7 @@ button {
 .demo-toast {
   background: var(--color-success-soft);
   border: 1px solid rgba(46, 125, 91, 0.35);
-  color: #5EDBA2;
+  color: var(--color-success-text);
   font-size: 0.84rem;
   font-weight: 500;
   padding: 10px 16px;
@@ -328,18 +409,18 @@ button {
 }
 
 .data-table tbody tr {
-  border-bottom: 1px solid rgba(30, 48, 72, 0.4);
+  border-bottom: 1px solid var(--color-table-row-border);
   transition: var(--transition);
 }
 
 .data-table tbody tr:hover {
-  background: rgba(201, 162, 39, 0.03);
+  background: var(--color-table-hover);
 }
 
 .data-table td { padding: 12px 14px; }
 
 .id-badge {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-neutral-soft);
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
   font-size: 0.73rem;
@@ -366,12 +447,12 @@ button {
 
 .estado-badge.activo {
   background: var(--color-success-soft);
-  color: #5EDBA2;
+  color: var(--color-success-text);
 }
 
 .estado-badge.inactivo {
   background: var(--color-error-soft);
-  color: #F87171;
+  color: var(--color-error-text);
 }
 
 /* Stat Cards */
@@ -716,13 +797,13 @@ button {
 .cliente-filter-btn.active-deuda {
   background: var(--color-error-soft);
   border-color: rgba(179, 64, 42, 0.5);
-  color: #F87171;
+  color: var(--color-error-text);
 }
 
 .cliente-filter-btn.active-aldia {
   background: var(--color-success-soft);
   border-color: rgba(46, 125, 91, 0.5);
-  color: #5EDBA2;
+  color: var(--color-success-text);
 }
 
 @media (max-width: 768px) {

@@ -44,8 +44,8 @@
   margin-top: 4px;
   display: block;
 }
-.field-hint.error   { color: #F87171; }
-.field-hint.success { color: #5EDBA2; }
+.field-hint.error   { color: var(--color-error-text); }
+.field-hint.success { color: var(--color-success-text); }
 
 /* Resumen del Ticket */
 .form-summary {
@@ -128,7 +128,7 @@
   align-items: center;
   padding: 1rem 1.25rem;
   border-top: 1px solid var(--color-border);
-  background: rgba(9, 18, 29, 0.4);
+  background: var(--color-footer-tint);
   border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
@@ -214,14 +214,14 @@
 
 .metodo-pago-btn.active-transferencia {
   border-color: var(--color-primary-bright);
-  background: rgba(42, 90, 150, 0.2);
-  color: #6EA8FE;
+  background: var(--color-info-soft);
+  color: var(--color-info-text);
 }
 
 .metodo-pago-btn.active-cta-cte {
   border-color: var(--color-warning);
   background: var(--color-warning-soft);
-  color: #FBBF24;
+  color: var(--color-warning-text);
 }
 
 /* ── Panel Deuda / Pendiente de Pago (Navy & Gold Custom) ── */
@@ -257,7 +257,7 @@
 }
 
 .pendiente-panel.is-active .pendiente-toggle-label {
-  color: #FBBF24;
+  color: var(--color-warning-text);
 }
 
 /* Switch personalizado */
@@ -274,7 +274,7 @@
 
 .custom-switch.checked {
   background: var(--color-warning);
-  border-color: #FBBF24;
+  border-color: var(--color-warning-text);
 }
 
 .custom-switch-thumb {
@@ -321,7 +321,7 @@
   padding: 8px 12px !important;
   height: 38px !important;
   outline: none !important;
-  color-scheme: dark; /* Fuerza calendario desplegable en tema oscuro en Chrome/Firefox */
+  color-scheme: var(--color-scheme); /* Fuerza calendario desplegable en tema oscuro en Chrome/Firefox */
   transition: var(--transition);
 }
 

@@ -8,8 +8,8 @@
   width: 100vw;
   background-color: var(--color-bg-main);
   background-image: 
-    radial-gradient(circle at 15% 15%, rgba(19, 49, 92, 0.25) 0%, transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(201, 162, 39, 0.06) 0%, transparent 40%);
+    radial-gradient(circle at 15% 15%, var(--login-gradient-one) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, var(--login-gradient-two) 0%, transparent 40%);
   padding: 1.5rem;
 }
 
@@ -109,7 +109,7 @@
   gap: 8px;
   background: var(--color-error-soft);
   border: 1px solid rgba(179, 64, 42, 0.3);
-  color: #F87171;
+  color: var(--color-error-text);
   padding: 9px 12px;
   border-radius: var(--radius-sm);
   font-size: 0.8rem;

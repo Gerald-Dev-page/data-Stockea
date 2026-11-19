@@ -9,13 +9,27 @@ import {
   Truck,
   LogOut,
   UserCircle,
+  Sun,
+  Moon,
 } from "lucide-react";
 import logo from "../public/Logo.png";
 import logoG from "../public/Logo-Gerald.png";
 import "../styles/sidebar.css";
+import { getSavedTheme, applyTheme } from "../theme";
 
 export default function Sidebar({ currentPage, setCurrentPage }) {
   const [usuario, setUsuario] = useState("");
+  const [tema, setTema] = useState(getSavedTheme);
+  const IconoTema = tema === "dark" ? Sun : Moon;
+  const etiquetaTema = tema === "dark" ? "Activar modo claro" : "Activar modo oscuro";
+
+  useEffect(() => {
+    applyTheme(tema);
+  }, [tema]);
+
+  const handleThemeToggle = () => {
+    setTema((actual) => (actual === "dark" ? "light" : "dark"));
+  };
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -70,6 +84,20 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
           </li>
         ))}
 
+        {/* Acceso al tema también desde la barra inferior móvil. */}
+        <li className="theme-item-mobile">
+          <button
+            type="button"
+            className="theme-toggle-mobile"
+            onClick={handleThemeToggle}
+            aria-label={etiquetaTema}
+            title={etiquetaTema}
+          >
+            <span className="menu-icon"><IconoTema size={19} strokeWidth={2} /></span>
+            <span className="menu-label">{tema === "dark" ? "Claro" : "Oscuro"}</span>
+          </button>
+        </li>
+
         {/* Únicamente visible en barra inferior móvil */}
         <li className="logout-item-mobile" onClick={handleLogout}>
           <span className="menu-icon">
@@ -90,6 +118,20 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
             </strong>
           </div>
         </div>
+
+        <button
+          type="button"
+          className="theme-toggle-desktop"
+          onClick={handleThemeToggle}
+          aria-label={etiquetaTema}
+          title={etiquetaTema}
+        >
+          <IconoTema size={17} strokeWidth={2} />
+          <span className="theme-toggle-text">{tema === "dark" ? "Modo claro" : "Modo oscuro"}</span>
+          <span className={`theme-toggle-track ${tema === "light" ? "is-light" : ""}`} aria-hidden="true">
+            <span className="theme-toggle-thumb" />
+          </span>
+        </button>
 
         <button 
           type="button" 

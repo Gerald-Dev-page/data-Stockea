@@ -120,13 +120,13 @@
 
 /* Card Principal (Ingresos Hoy) con tono Navy más marcado */
 .kpi-highlight {
-  background: linear-gradient(135deg, #10243C, #18375C);
+  background: var(--gradient-highlight);
   border-color: rgba(201, 162, 39, 0.35);
 }
 
 .kpi-highlight .kpi-label { color: var(--color-accent); }
-.kpi-highlight .kpi-value { color: #FFFFFF; }
-.kpi-highlight .kpi-sub   { color: rgba(255, 255, 255, 0.65); }
+.kpi-highlight .kpi-value { color: var(--color-highlight-value); }
+.kpi-highlight .kpi-sub   { color: var(--color-highlight-sub); }
 
 .kpi-icon {
   display: flex;
@@ -140,8 +140,8 @@
   margin-bottom: 6px;
 }
 
-.kpi-icon-blue  { background: rgba(42, 90, 150, 0.15); color: #6EA8FE; }
-.kpi-icon-green { background: var(--color-success-soft); color: #5EDBA2; }
+.kpi-icon-blue  { background: rgba(42, 90, 150, 0.15); color: var(--color-info-text); }
+.kpi-icon-green { background: var(--color-success-soft); color: var(--color-success-text); }
 
 .kpi-label {
   font-size: 0.72rem;
@@ -176,8 +176,8 @@
   width: fit-content;
 }
 
-.badge-up   { background: var(--color-success-soft); color: #5EDBA2; }
-.badge-down { background: var(--color-error-soft);   color: #F87171; }
+.badge-up   { background: var(--color-success-soft); color: var(--color-success-text); }
+.badge-down { background: var(--color-error-soft);   color: var(--color-error-text); }
 
 /* ── Módulos y Gráfico ── */
 .dash-modules {
@@ -240,7 +240,7 @@
 .bar-track {
   flex: 1;
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-chart-track);
   border-radius: 4px 4px 0 0;
   display: flex;
   align-items: flex-end;
@@ -249,7 +249,7 @@
 
 .bar-fill {
   width: 100%;
-  background: rgba(42, 90, 150, 0.4);
+  background: var(--color-chart-fill);
   border-radius: 4px 4px 0 0;
   transition: height 0.6s ease;
 }
@@ -311,7 +311,7 @@
 .cat-bar-track {
   flex: 1;
   height: 5px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--color-chart-track);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
